@@ -897,7 +897,7 @@ if (0 != access(output_dir.c_str(), 0))
  	// variables for progress bar
 	double progress = 0.0;
 	double tot_iter = 0.0;
-	int barWidth = 70;
+	int barWidth = 40;
 
 	for (int t = 0; t < out_times; t++) {
 		int iter_num = iter_out;
