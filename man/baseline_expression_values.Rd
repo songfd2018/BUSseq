@@ -11,14 +11,19 @@ The function gives the estimated log-scale baseline expression levels from a
 baseline_expression_values(BUSseqfits_obj)
 }
 \arguments{
-  \item{BUSseqfits_obj}{A BUSseqfits object obtained from the function \code{BUSseq_MCMC}.}
+  \item{BUSseqfits_obj}{A BUSseqfits object obtained from the function 
+  \code{BUSseq_MCMC}.}
 }
 \value{
-\item{alpha.est}{The estimated log-scale baseline expression levels, a G-dimensional vector whose g-th element is the estimated log-scale mean gene 
+\item{alpha.est}{The estimated log-scale baseline expression levels, a 
+G-dimensional vector whose g-th element is the estimated log-scale mean gene 
 expression level of gene g in the first cell type.}
 }
 \references{
-Fangda Song, Ga Ming Chan and Yingying Wei. Flexible Experimental Designs for Valid Single-cell RNA-sequencing Experiments Allowing Batch Effects Correction, Manuscript.
+Song, Fangda, Ga Ming Angus Chan, and Yingying Wei. 
+Flexible experimental designs for valid single-cell RNA-sequencing 
+experiments allowing batch effects correction. 
+Nature communications 11, no. 1 (2020): 1-15.
 }
 \author{
 Fangda Song

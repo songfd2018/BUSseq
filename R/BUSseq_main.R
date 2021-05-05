@@ -13,7 +13,8 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
                         # false discovery rate
                         fdr = 0.05,
                         # hyperparameters
-                        hyper_pi = 2, hyper_gamma0 = 3, hyper_gamma1 = c(0.001,0.01),
+                        hyper_pi = 2, hyper_gamma0 = 3, 
+                        hyper_gamma1 = c(0.001,0.01),
                         hyper_alpha = 5, tau1sq = 50,
                         hyper_p = c(1,3), hyper_tau0sq = c(2,0.01),
                         hyper_nu = 5, hyper_delta = 5,
@@ -29,7 +30,8 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
       if(is(ObservedData[[b]],"data.frame") | is(ObservedData[[b]],"matrix")){
         ObservedData[[b]] <- as.matrix(ObservedData[[b]])
       }else{
-        stop(paste0("Each element of ObservedData must be a \"matrix\" or \"data.frame\" object!\n"))
+        stop(paste0("Each element of ObservedData must be a",
+                    " \"matrix\" or \"data.frame\" object!\n"))
       }
       Read <- cbind(Read,ObservedData[[b]])
       nb <- c(nb,ncol(ObservedData[[b]]))
@@ -44,7 +46,6 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
     stop("The batch number must be greater than one.\n")
   }
   
-  
   K <- n.celltypes
   G <- nrow(Read)
   N <- sum(nb)
@@ -54,11 +55,10 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
                 " than the assumed cell type number.\n"))
   }
   
-  ####Record the posterior samplingo on the hard disk
+  ####Record the posterior sampling on the hard disk
   if(!dir.exists(working_dir)){
     dir.create(working_dir)
   }
-  #setwd(working_dir)
   sampling_dir <- paste0(working_dir,"/MCMC_sampling_K",K)
   dir.create(sampling_dir, showWarnings=FALSE)
   
@@ -99,15 +99,14 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
   
   t.end <- Sys.time()
   message(paste0("   The MCMC sampling takes: ", 
-                 round(difftime(t.end, t.start,units="mins"), 3), " mins", "\n"))
+                 round(difftime(t.end, t.start,units="mins"), 3), 
+                 " mins", "\n"))
   
   #######################
   # Posterior inference #
   #######################
   message("   conducting the posterior inferences...\n")
-  
   t.start<-Sys.time()
-  
   post_inference <- .C("BUSseq_inference",
                        # count data
                        y_obs = as.integer(t(Read)), 
@@ -122,64 +121,47 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
                        # false discovery rate
                        fdr = as.double(fdr),
                        # posterior mean, mode or standard deviation
-                       alpha_est = as.double(rep(0,G)), alpha_sd = as.double(rep(0,G)),
-                       beta_est = as.double(matrix(0,K,G)), beta_sd = as.double(matrix(0,K,G)),
-                       nu_est = as.double(matrix(0,B,G)), nu_sd = as.double(matrix(0,B,G)),
-                       delta_est = as.double(rep(0,N)), delta_sd = as.double(rep(0,N)),
-                       gamma_est = as.double(matrix(0, 2, B)), gamma_sd = as.double(matrix(0,2,B)),
-                       phi_est = as.double(matrix(0,B,G)), phi_sd = as.double(matrix(0,B,G)),
-                       pi_est = as.double(matrix(0, K, B)), pi_sd = as.double(matrix(0, K, B)),
+                       alpha_est = as.double(rep(0,G)), 
+                       alpha_sd = as.double(rep(0,G)),
+                       beta_est = as.double(matrix(0,K,G)), 
+                       beta_sd = as.double(matrix(0,K,G)),
+                       nu_est = as.double(matrix(0,B,G)), 
+                       nu_sd = as.double(matrix(0,B,G)),
+                       delta_est = as.double(rep(0,N)), 
+                       delta_sd = as.double(rep(0,N)),
+                       gamma_est = as.double(matrix(0, 2, B)),
+                       gamma_sd = as.double(matrix(0,2,B)),
+                       phi_est = as.double(matrix(0,B,G)), 
+                       phi_sd = as.double(matrix(0,B,G)),
+                       pi_est = as.double(matrix(0, K, B)), 
+                       pi_sd = as.double(matrix(0, K, B)),
                        tau0_est = as.double(0), tau0_sd = as.double(0),
                        p_est = as.double(0), p_sd = as.double(0),
-                       w_est = as.integer(rep(0, N)), PPI_est = as.double(matrix(0, K, G)),
+                       w_est = as.integer(rep(0, N)), 
+                       PPI_est = as.double(matrix(0, K, G)),
                        D_est = as.integer(rep(0,G)), BIC = as.double(0))
   
-  # alpha
   alpha.est <- post_inference$alpha_est
   alpha.sd <- post_inference$alpha_sd
-  
-  # beta
   beta.est <- matrix(post_inference$beta_est, G, K, byrow = TRUE)
   beta.sd <- matrix(post_inference$beta_sd, G, K, byrow = TRUE)
-  
-  # nu
   nu.est <- matrix(post_inference$nu_est, G, B, byrow = TRUE)
   nu.sd <- matrix(post_inference$nu_sd, G, B, byrow = TRUE)
-  
-  # delta
   delta.est <- post_inference$delta_est
   delta.sd <- post_inference$delta_sd
-  
-  # gamma
   gamma.est <- matrix(post_inference$gamma_est, B, 2, byrow = TRUE)
   gamma.sd <- matrix(post_inference$gamma_sd, B, 2, byrow = TRUE)
-  
-  # phi
   phi.est <- matrix(post_inference$phi_est, G, B, byrow = TRUE)
   phi.sd <- matrix(post_inference$phi_sd, G, B, byrow = TRUE)
-  
-  # pi
   pi.est <- matrix(post_inference$pi_est, B, K, byrow = TRUE)
   pi.sd <- matrix(post_inference$pi_sd, B, K, byrow = TRUE)
-  
-  # tau0
   tau0.est <- post_inference$tau0_est
   tau0.sd <- post_inference$tau0_sd
-  
-  # p
   p.est <- post_inference$p_est
   p.sd <- post_inference$p_sd
-  
-  # w
   w.est <- post_inference$w_est + 1
-  
-  # PPI
   PPI.est <- matrix(post_inference$PPI_est, G, K, byrow = TRUE)
-  
-  # D
   D.est <- post_inference$D_est
-  
-  # BIC
   BIC <- post_inference$BIC
   
   t.end<-Sys.time()
@@ -419,7 +401,6 @@ imputed_read_counts<- function(BUSseqfits_obj){
 #obatin the corrected count data
 corrected_read_counts<- function(BUSseqfits_obj){
    if(is(BUSseqfits_obj,"BUSseqfits")){
-   
    Truereads_list <- BUSseqfits_obj$CountData_imputed
    .B <- BUSseqfits_obj$n.batch
    .nb <- BUSseqfits_obj$n.perbatch
@@ -432,7 +413,6 @@ corrected_read_counts<- function(BUSseqfits_obj){
    .delta <- BUSseqfits_obj$delta.est
    .phi <- BUSseqfits_obj$phi.est
    .w <- BUSseqfits_obj$w.est
-   
    Truereads <- NULL
    delta_vec <- NULL
    w_vec <- NULL
@@ -441,18 +421,14 @@ corrected_read_counts<- function(BUSseqfits_obj){
       delta_vec <- c(delta_vec, .delta[[b]])
       w_vec <- c(w_vec, .w[[b]])
    }
-   
-   t.start<-Sys.time()
    message("   correcting read counts...\n")
-   
    read_corrected <- Truereads
    cell_index <- 1
    for(b in seq_len(.B)){
       for(i in seq_len(.nb[b])){
       unc_mu <- exp(.logmu[,w_vec[cell_index]] + 
                       .nu[,b] + delta_vec[cell_index])
-      p_x<-pnbinom(Truereads[,cell_index],size=.phi[,b], 
-                   mu=unc_mu)
+      p_x<-pnbinom(Truereads[,cell_index],size=.phi[,b], mu=unc_mu)
       p_xminus1<-pnbinom(Truereads[,cell_index]-1,size=.phi[,b], 
                       mu=unc_mu)
       u <- runif(.G,min=p_xminus1,max=p_x)
@@ -460,33 +436,22 @@ corrected_read_counts<- function(BUSseqfits_obj){
       cor_mu <- exp(.logmu[,w_vec[cell_index]])
       read_corrected[,cell_index] <- 
         qnbinom(u,size =.phi[,1], mu=cor_mu)
-      
       cell_index <- cell_index + 1
       }
    }
-   
    Read_corrected <- list()
    cell_index <- 0
    for(b in seq_len(.B)){
       Read_corrected[[b]] <- read_corrected[,cell_index + seq_len(.nb[b])]
       cell_index <- cell_index + .nb[b]
    }
-   
    class(Read_corrected) <- "CountData"
-   
-   t.end<-Sys.time()
-   message(paste0("   Correcting read counts takes: ", 
-                round(difftime(t.end, t.start, units="mins"), 3), 
-                " mins", "\n"))
-   
    message(paste0("The output format is a \"CountData\" object with length",
          " equal to the batch number.\n"))
    message("Each element of the object is the corrected read count matrix.\n")
    message(paste0("In each matrix, each row represents a gene and",
          " each column correspods to a cell.\n"))
-   
    return(Read_corrected)
-   
    }else{
    stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
    }
@@ -620,50 +585,35 @@ heatmap_data_BUSseq <- function(CountData_obj, gene_set=NULL,
                         project_name="BUSseq_heatmap", 
                         image_dir=NULL, color_key_seq=NULL, 
                         image_width=1440, image_height=1080){
-   
    if(is(CountData_obj,"CountData")){
    .B <- length(CountData_obj)
    .G <- nrow(CountData_obj[[1]])
    .nb <- rep(NA,.B)
-   for(b in seq_len(.B)){
-   .nb[b] <- ncol(CountData_obj[[b]])
-   }
-
-   if(is.null(gene_set)){
-   gene_set <- seq_len(.G)
-   }
-
+   for(b in seq_len(.B)) .nb[b] <- ncol(CountData_obj[[b]])
+   if(is.null(gene_set)) gene_set <- seq_len(.G)
    #heatmap cell colors
    colfunc <- colorRampPalette(c("grey", "black"))
    #batch colors
    color_batch_func <- colorRampPalette(
      c("#EB4334","#FBBD06","#35AA53","#4586F3"))
-   
    color_batch <- color_batch_func(.B)
-   
    color_batch2 <- NULL
-   
-   for(b in seq_len(.B)) {
-   color_batch2 <- c(color_batch2, rep(color_batch[b], .nb[b]))
-   }
+   for(b in seq_len(.B)){
+     color_batch2 <- c(color_batch2, rep(color_batch[b], .nb[b]))
+   } 
    log1p_mat <- NULL
    for(b in seq_len(.B)){
-   log1p_mat <- cbind(log1p_mat, log1p(CountData_obj[[b]]))
-   }
+     log1p_mat <- cbind(log1p_mat, log1p(CountData_obj[[b]]))
+   } 
    log1p_mat_interest <- log1p_mat[gene_set, ]
-   
    if(is.null(color_key_seq)){
    range_data <- range(log1p_mat_interest)
    color_key_seq <- seq(from=floor(range_data[1]) - 0.5, 
                    to=ceiling(range_data[2]) + 0.5, length.out=11)
    }
-   
-   if(is.null(image_dir)){
-   image_dir <- "./image"
-   }
+   if(is.null(image_dir)) image_dir <- "./image"
    #create the folder
    dir.create(image_dir,showWarnings=FALSE)
-   
    png(paste(image_dir,"/",project_name,"_log1p_data.png",sep=""),
       width=image_width, height=image_height)
    heatmap.2(log1p_mat_interest,
@@ -678,6 +628,6 @@ heatmap_data_BUSseq <- function(CountData_obj, gene_set=NULL,
          keysize=0.8, cexRow=0.5,trace="none")#font size
    dev.off()
    }else{
-   stop("CountData_obj must be   a \"CountData\" object!\n")
+   stop("CountData_obj must be a \"CountData\" object!\n")
    }
 }

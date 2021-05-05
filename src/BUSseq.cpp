@@ -537,24 +537,22 @@ double postprob_DE_thr_fun(double *_PPI, double _fdr_threshold, int _G, int _K){
     vec_PPI.resize(distance(vec_PPI.begin(),it));
 
     int i = 0;
-    while(fdr <= _fdr_threshold & i < (unsigned)vec_PPI.size()){
-        kappa = 1 - vec_PPI[i];
-        fdr = fdrDEindicator(_PPI, kappa, _G, _K);
+	kappa = 1 - vec_PPI[0];
+	fdr = fdrDEindicator(_PPI, kappa, _G, _K);
+
+    while(fdr <= _fdr_threshold & kappa <= postprob_DE_thr &i < (unsigned)vec_PPI.size()){
         i++;
+		kappa = 1 - vec_PPI[i];
+        fdr = fdrDEindicator(_PPI, kappa, _G, _K);
     }
-	double PPI_thres;
-	if(i < (unsigned)vec_PPI.size()){
-		i = i - 2;// the index of last i such that fdr <= _fdr_threshold to control FDR
-		PPI_thres = vec_PPI[i];
+
+	if(i == 0){
+		kappa = 0.0;
 	}else{
-		i = 0; // Even the largest
-		PPI_thres = postprob_DE_thr;
+		kappa = 1 - vec_PPI[i-1];
 	}
     
-    if(vec_PPI[i] > postprob_DE_thr){
-        postprob_DE_thr = vec_PPI[i];
-    }
-    return postprob_DE_thr;
+    return kappa;
 }
 
 int IG_index(double *_PPI, double _postprob_DE_thr, int _K){

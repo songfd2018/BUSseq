@@ -4,14 +4,16 @@
 Summarize a \code{BUSseqfits} Object
 }
 \description{
-Call the function to summarize a \code{BUSseqfits} object, the output of \code{BUSseq_MCMC}.
+Call the function to summarize a \code{BUSseqfits} object, 
+the output of \code{BUSseq_MCMC}.
 }
 \usage{
 \method{summary}{BUSseqfits}(object, ...)
 }
 \arguments{
   \item{object}{
-A \code{BUSseqfits} object obtained from the function \code{BUSseq_MCMC}.
+A \code{BUSseqfits} object obtained from the function 
+\code{BUSseq_MCMC}.
 }
 \item{...}{not used.}
 }
@@ -19,7 +21,10 @@ A \code{BUSseqfits} object obtained from the function \code{BUSseq_MCMC}.
 Summarize the results from the output of \code{BUSseq_MCMC}.
 }
 \references{
-Fangda Song, Ga Ming Chan and Yingying Wei. Flexible Experimental Designs for Valid Single-cell RNA-sequencing Experiments Allowing Batch Effect Correction, Manuscript.
+Song, Fangda, Ga Ming Angus Chan, and Yingying Wei. 
+Flexible experimental designs for valid single-cell RNA-sequencing 
+experiments allowing batch effects correction. 
+Nature communications 11, no. 1 (2020): 1-15.
 }
 \author{
 Fangda Song

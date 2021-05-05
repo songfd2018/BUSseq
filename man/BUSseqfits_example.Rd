@@ -3,15 +3,18 @@
 \alias{BUSseqfits_example}
 \title{An external example of the BUSseqfits object}
 \description{
-  This data set is a BUSseqfits object obtained from the simulatied data in the "Example" of \code{BUSseq-package}.
+  This data set is a BUSseqfits object obtained from 
+  the simulatied data in the "Example" of \code{BUSseq-package}.
 }
 \usage{BUSseqfits_example}
 \details{
-  The simuated count data consist of three 150-cell batches. In total, 1000 genes are measured. Moreover, all cells come from 4 cell types.
+  The simuated count data consist of three 150-cell batches. 
+  In total, 1000 genes are measured. 
+  Moreover, all cells come from 4 cell types.
 }
 \format{A BUSseqfits object.}
 \examples{
-\dontrun{
+\donttest{
 ################################
 # Set the Synthetic Parameters #
 ################################
@@ -182,13 +185,17 @@ for(b in 1:B){
     }
   }
 }
-BUSseqfits_example <- BUSseq_MCMC(ObservedData = y, seed = 1234, n.cores = 4,
-                              n.celltypes = 4, n.iterations = 500)
+BUSseqfits_example <- BUSseq_MCMC(ObservedData = y, 
+          seed = 1234, n.cores = 4,
+          n.celltypes = 4, n.iterations = 500)
 
 }
 }
 \source{The "Example" of \code{BUSseq-package}}
 \references{
-Fangda Song, Ga Ming Chan and Yingying Wei. Flexible Experimental Designs for Valid Single-cell RNA-sequencing Experiments Allowing Batch Effects Correction, Manuscript.
+Song, Fangda, Ga Ming Angus Chan, and Yingying Wei. 
+Flexible experimental designs for valid single-cell RNA-sequencing 
+experiments allowing batch effects correction. 
+Nature communications 11, no. 1 (2020): 1-15.
 }
 \keyword{datasets}

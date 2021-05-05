@@ -13,7 +13,8 @@
 %\packageDESCRIPTION{BUSseq}
 %}
 %\packageIndices{BUSseq}{
-%~ An overview of how to use the package, including the most important functions ~~
+%~ An overview of how to use the package, 
+% including the most important functions ~~
 %}
 \author{
 \packageAuthor{BUSseq}
@@ -21,7 +22,10 @@
 Maintainer: \packageMaintainer{BUSseq}
 }
 \references{
-Fangda Song, Ga Ming Chan and Yingying Wei. Flexible Experimental Designs for Valid Single-cell RNA-sequencing Experiments Allowing Batch Effects Correction, Manuscript.
+Song, Fangda, Ga Ming Angus Chan, and Yingying Wei. 
+Flexible experimental designs for valid single-cell RNA-sequencing 
+experiments allowing batch effects correction. 
+Nature communications 11, no. 1 (2020): 1-15.
 }
 %\keyword{ package }
 %\seealso{
@@ -29,13 +33,13 @@ Fangda Song, Ga Ming Chan and Yingying Wei. Flexible Experimental Designs for Va
 %~~ \code{\link[<pkg>:<pkg>-package]{<pkg>}} ~~
 %}
 \examples{
-\dontrun{
+\donttest{
 #######################################
 # Apply BUSseq to the Simulation Data #
 #######################################
-library(BUSseq)
 ObservedCounts <- BUSseqfits_example$CountData_raw
-BUSseqfits_res <- BUSseq_MCMC(ObservedCounts, n.celltypes = 4, seed = 123, n.iterations = 1000)
+BUSseqfits_res <- BUSseq_MCMC(ObservedCounts, n.celltypes = 4, 
+seed = 123, n.iterations = 1000)
 BUSseqfits_res <- BUSseqfits_example
 
 ################################################
@@ -93,6 +97,7 @@ heatmap_data_BUSseq(CountData_raw, project_name="Heatmap_raw")
 heatmap_data_BUSseq(CountData_imputed, project_name="Heatmap_imputed")
 
 #generate the heatmap of corrected read count data
-heatmap_data_BUSseq(CountData_corrected, project_name="Heatmap_corrected")
+heatmap_data_BUSseq(CountData_corrected, 
+project_name="Heatmap_corrected")
 }
 }
