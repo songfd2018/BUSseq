@@ -1,4 +1,4 @@
-﻿#ifdef _WIN32
+#ifdef _WIN32
 
 #include <iostream>
 #include <iomanip>
@@ -103,7 +103,7 @@ int rand_NB(double _r, double _mu, omprng _rng){
         res ++;
         u = _rng.runif();
         p = p * u;
-        while(p < 1 & nu > 0){
+        while((p < 1) & (nu > 0)){
             if(nu > STEP){
                 p = p * exp(STEP);
                 nu = nu - STEP;
@@ -540,7 +540,7 @@ double postprob_DE_thr_fun(double *_PPI, double _fdr_threshold, int _G, int _K){
 	kappa = 1 - vec_PPI[0];
 	fdr = fdrDEindicator(_PPI, kappa, _G, _K);
 
-    while(fdr <= _fdr_threshold & kappa <= postprob_DE_thr &i < (unsigned)vec_PPI.size()){
+    while((fdr <= _fdr_threshold) & (kappa <= postprob_DE_thr) & (i < (unsigned)vec_PPI.size())){
         i++;
 		kappa = 1 - vec_PPI[i];
         fdr = fdrDEindicator(_PPI, kappa, _G, _K);
