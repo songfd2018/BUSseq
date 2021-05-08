@@ -1,9 +1,0 @@
-Change in version 0.99.0 (2021-05-04)
-+ Submitted to Bioconductor
-
-Changes in version 0.99.1 (2021-05-08)
-+ Solved warnings and notes reported by R CMD Check and BiocCheck
-  o  Added parentheses around comparison in operand of & in C++ source code
-  o  Added the R version requirement in DESCRIPTION
-  o  Removed 'paste' in condition signalers
-  o  Registering in the support site
