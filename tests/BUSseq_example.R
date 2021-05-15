@@ -3,7 +3,8 @@
 #######################################
 library(BUSseq)
 ObservedCounts <- BUSseqfits_example$CountData_raw
-BUSseqfits_res <- BUSseq_MCMC(ObservedCounts, n.celltypes = 4, seed = 2353, n.iterations = 1000)
+BUSseqfits_res <- BUSseq_MCMC(ObservedCounts, n.celltypes = 4, 
+                              seed = 1234, n.iterations = 500)
 BUSseqfits_res <- BUSseqfits_example
 
 ################################################
@@ -56,9 +57,6 @@ CountData_corrected <- corrected_read_counts(BUSseqfits_res)
 #################
 #generate the heatmap of raw read count data
 heatmap_data_BUSseq(CountData_raw, project_name="Heatmap_raw")
-
-#generate the heatmap of imputed read count data
-heatmap_data_BUSseq(CountData_imputed, project_name="Heatmap_imputed")
 
 #generate the heatmap of corrected read count data
 heatmap_data_BUSseq(CountData_corrected, project_name="Heatmap_corrected")

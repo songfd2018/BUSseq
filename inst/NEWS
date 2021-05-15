@@ -1,3 +1,44 @@
 Change in version 0.99.0 (2020-05-04)
 + Submitted to Bioconductor
 
+Change in version 0.99.1 (2020-05-07)
++ Revised the warnings by R CMD check, including adding parentheses in src and R dependency in DESCRIPTION
+
+Change in version 0.99.2 (2020-05-08)
++ Correctly pushing by Git
+
+Change in version 0.99.3 (2020-05-08)
++ Set LazyData as TRUE for building vignette
+
+Change in version 0.99.4 (2020-05-12)
++ Correct R version dependency
++ Solve the warnings by missing parenthesees
+
+Change in version 0.99.5 (2020-05-12)
++ Adding the macro for Mac in the source code
++ Shortening the vignettes
++ Adding Watched Tags BUSseq to my profile
+
+Change in version 0.99.6 (2020-05-13)
++ Downsizing the example dataset to avoid reaching the time limit of check
+
+Change in version 0.99.7 (2020-05-14)
++ Updating th source code for MacOS
+
+Change in version 0.99.8 (2020-05-15)
++ Correcting the usage of OS macro
+
+Change in version 0.99.9 (2020-05-15)
++ Modifying the warnings when building on MacOS
+
+Change in version 0.99.10 (2020-05-15)
++ Continuing to debug for MacOS
+
+Change in version 0.99.11 (2020-05-15)
++ Debugging for MacOS
+
+Change in version 0.99.12 (2020-05-15)
++ Revising the random number generator for MacOS
+
+Change in version 0.99.13 (2020-05-15)
++ Modifying the running example 

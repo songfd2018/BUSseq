@@ -6,7 +6,6 @@
 #include <math.h> // pow, sqrt, lgamma
 #include <cmath> //
 #include "omprng.h"
-# include <chrono> // time
 #include <stdlib.h>
 #include <string>
 #include <stdio.h>
@@ -16,9 +15,7 @@
 #include <R.h>
 #include <Rinternals.h>
 
-#endif
-
-#ifdef linux
+#elif __linux__
 
 #include <iostream>
 #include <iomanip>
@@ -26,7 +23,24 @@
 #include <math.h> // pow, sqrt, lgamma
 #include <cmath> //
 #include "omprng.h"
-# include <chrono> // time
+#include <stdlib.h>
+#include <string>
+#include <stdio.h>
+#include <sys/stat.h>  //mkdir
+#include <sys/types.h>
+#include <algorithm>    // sort
+#include <vector>  
+#include <R.h>
+#include <Rinternals.h>
+
+#elif __APPLE__
+
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+#include <math.h> // pow, sqrt, lgamma
+#include <cmath> //
+#include "singlerng.h"
 #include <stdlib.h>
 #include <string>
 #include <stdio.h>
@@ -38,7 +52,6 @@
 #include <Rinternals.h>
 
 #endif
-
 
 using namespace std;
 
@@ -65,7 +78,427 @@ void BUSseq_inference(int *Y_vec, int *Dim,
 	int *w_est, double *PPI_est,
 	int *D_est, double *BIC);
 
+void _update_logmu(int _B, int* _nb,
+	int* _W, double _alpha, double* _beta, double* _nu, double* _delta,
+	double* _logmu) {
+	int cell_index = 0;
+	int k;
+	//auxiliry
+	for (int b = 0; b < _B; b++) {
+		for (int i = 0; i < _nb[b]; i++) {
+			k = _W[cell_index];
+			_logmu[cell_index] = _alpha + _beta[k] + _nu[b] + _delta[cell_index];
+			cell_index++;
+		}
+	}
+}
 
+
+
+#ifdef __APPLE__
+
+int rand_cate(double* _prop, singlerng _rng){
+    int res = 0;
+    double u = _rng.runif();
+    while(u > _prop[res]){
+        u = u - _prop[res];
+        res++;
+    }
+    return res;
+}
+
+int rand_Ber(double _prob, singlerng _rng){
+    int res = 1;
+    double u = _rng.runif();
+    if(u > _prob){
+        res = 0;
+    }
+    return res;
+}
+
+int rand_NB(double _r, double _mu, singlerng _rng){
+    
+    double lambda, nu, p, u;
+    double STEP = 500;// steps for large lambda in Poisson distribution
+    int res = 0;
+
+    // sample lambda from gamma distribution
+    lambda = _rng.rgamma(_r, _mu/_r);
+        
+    // sample x from Poisson distribution
+    nu = lambda;
+    p = 1.0;
+
+    do{
+        res ++;
+        u = _rng.runif();
+        p = p * u;
+        while((p < 1) & (nu > 0)){
+            if(nu > STEP){
+                p = p * exp(STEP);
+                nu = nu - STEP;
+            }else{
+                p = p * exp(nu);
+                nu = 0;
+            }
+        }
+    }while(p > 1);
+
+    res--;
+    return res;
+}
+
+void rand_Dir(double *_xi, int _K, singlerng _rng, double *_pi){
+
+    double *rn_gam = new double[_K];
+    double sum_gam = 0.0;
+    for(int k = 0; k < _K; k++){
+        rn_gam[k] = _rng.rgamma(_xi[k], 1.0);
+        sum_gam += rn_gam[k];
+    }
+    for(int k = 0; k < _K; k++){
+        _pi[k] = rn_gam[k] / sum_gam;
+    }
+
+    delete [] rn_gam;
+}
+
+
+
+void _update_zx(int _B, int* _nb,
+	double **_gamma, double *_phi, double *_logmu,
+	int *_Y, singlerng _rng,
+	int *_X, int *_Z) {
+
+	//int ind, ind_nu;
+	//int ind_n = 0; //index the row of (b,i)	
+	int cell_index = 0;
+	double log_rat, u, temp_max, acc_rat;
+	int temp_x;
+
+
+	for (int b = 0; b < _B; b++) {
+		for (int i = 0; i < _nb[b]; i++) {
+			//ind = ind_n + j * _N;
+			//ind_nu = b + j * _B;
+			// printf("Sampling for cell %d.\n", cell_index + 1);
+			// if(cell_index == 66){
+			//     printf("Gamma_b0 = %f.\n", _gamma[b][0]);
+			//     printf("mu_bi = %f\n", exp(_logmu[cell_index]));
+			//     printf("phi = %f\n", _phi[b]);
+			// }
+
+			if (_Y[cell_index] == 0) {
+				//update z_{big}
+				if (_X[cell_index] == 0) {
+					// printf("Sampling for Z.\n");
+					log_rat = _gamma[b][0];
+					_Z[cell_index] = rand_Ber(1 / (1 + exp(-log_rat)), _rng);
+				}
+				else {
+					_Z[cell_index] = 1;
+				}// end of if X == 0
+
+				//Rprintf("z %d %d %d = %d\n", b, i, j, Dropout[index]);
+				//update x_{big}
+				if (_Z[cell_index] == 1) {// No dropout event
+					// printf("Sampling for X.\n");
+					//MH sampling
+					temp_x = rand_NB(_phi[b], exp(_logmu[cell_index]), _rng);
+					// printf("Sampling for X.\n");
+					u = _rng.runif();
+					//make the exponential be compuational
+					temp_max = 0.0;
+					if (temp_max < -_gamma[b][0] - _gamma[b][1] * temp_x) {
+						temp_max = -_gamma[b][0] - _gamma[b][1] * temp_x;
+					}
+					if (temp_max < -_gamma[b][0] - _gamma[b][1] * _X[cell_index]) {
+						temp_max = -_gamma[b][0] - _gamma[b][1] * _X[cell_index];
+					}
+
+					acc_rat = (exp(-temp_max) + exp(-_gamma[b][0] - _gamma[b][1] * _X[cell_index] - temp_max));
+					acc_rat = acc_rat / (exp(-temp_max) + exp(-_gamma[b][0] - _gamma[b][1] * temp_x - temp_max));
+					if (u < acc_rat) {
+						_X[cell_index] = temp_x;
+					}
+				}
+				else {
+					_X[cell_index] = 0;
+				}// end of if Z == 0
+			}// end of if Y == 0
+			cell_index++;
+		}// end of i for
+	}// end of b for
+}
+
+void _update_zx_optional(int _B, int* _nb, bool* drop,
+	double **_gamma, double *_phi, double *_logmu,
+	int *_Y, singlerng _rng,
+	int *_X, int *_Z) {
+
+	//int ind, ind_nu;
+	//int ind_n = 0; //index the row of (b,i)	
+	int cell_index = 0;
+	double log_rat, u, temp_max, acc_rat;
+	int temp_x;
+
+
+	for (int b = 0; b < _B; b++) {
+		if (drop[b]) {
+			for (int i = 0; i < _nb[b]; i++) {
+				//ind = ind_n + j * _N;
+				//ind_nu = b + j * _B;
+				// printf("Sampling for cell %d.\n", cell_index + 1);
+				// if(cell_index == 66){
+				//     printf("Gamma_b0 = %f.\n", _gamma[b][0]);
+				//     printf("mu_bi = %f\n", exp(_logmu[cell_index]));
+				//     printf("phi = %f\n", _phi[b]);
+				// }
+
+				if (_Y[cell_index] == 0) {
+					//update z_{big}
+					if (_X[cell_index] == 0) {
+						// printf("Sampling for Z.\n");
+						log_rat = _gamma[b][0];
+						_Z[cell_index] = rand_Ber(1 / (1 + exp(-log_rat)), _rng);
+					}
+					else {
+						_Z[cell_index] = 1;
+					}// end of if X == 0
+
+					//Rprintf("z %d %d %d = %d\n", b, i, j, Dropout[index]);
+					//update x_{big}
+					if (_Z[cell_index] == 1) {// No dropout event
+						// printf("Sampling for X.\n");
+						//MH sampling
+						temp_x = rand_NB(_phi[b], exp(_logmu[cell_index]), _rng);
+						// printf("Sampling for X.\n");
+						u = _rng.runif();
+						//make the exponential be compuational
+						temp_max = 0.0;
+						if (temp_max < -_gamma[b][0] - _gamma[b][1] * temp_x) {
+							temp_max = -_gamma[b][0] - _gamma[b][1] * temp_x;
+						}
+						if (temp_max < -_gamma[b][0] - _gamma[b][1] * _X[cell_index]) {
+							temp_max = -_gamma[b][0] - _gamma[b][1] * _X[cell_index];
+						}
+
+						acc_rat = (exp(-temp_max) + exp(-_gamma[b][0] - _gamma[b][1] * _X[cell_index] - temp_max));
+						acc_rat = acc_rat / (exp(-temp_max) + exp(-_gamma[b][0] - _gamma[b][1] * temp_x - temp_max));
+						if (u < acc_rat) {
+							_X[cell_index] = temp_x;
+						}
+					}
+					else {
+						_X[cell_index] = 0;
+					}// end of if Z == 0
+				}// end of if Y == 0
+				cell_index++;
+			}// end of i for
+		}
+		else {
+			cell_index = cell_index + _nb[b];
+		}
+	}// end of b for
+}
+
+double _update_alpha(int _B, int* _nb,//dimension
+	double _mu_a, double _sigma_a,//prior
+	int *_W, double _alpha, double *_beta, double *_nu, double *_delta, double *_phi, //parameter
+	int *_X, singlerng _rng) {
+	//int ind, ind_beta, ind_nu;
+	//int ind_n; //index the row of (b,i)
+
+	int cell_index = 0;
+
+	//proposal
+	double alpha_iter = _rng.rnorm(_alpha, 0.1);
+	double logr = 0.0;
+	int k;
+	double res;
+
+	//prior
+	logr = logr - pow(alpha_iter - _mu_a, 2.0) / 2 / pow(_sigma_a, 2.0) + pow(_alpha - _mu_a, 2.0) / 2 / pow(_sigma_a, 2.0);
+
+	for (int b = 0; b < _B; b++) {
+		for (int i = 0; i < _nb[b]; i++) {
+			k = _W[cell_index];
+
+			//numerator
+			logr = logr + alpha_iter * _X[cell_index] - (_phi[b] + _X[cell_index]) * log(_phi[b] + exp(alpha_iter + _beta[k] + _nu[b] + _delta[cell_index]));
+			//denomerator
+			logr = logr - _alpha * _X[cell_index] + (_phi[b] + _X[cell_index]) * log(_phi[b] + exp(_alpha + _beta[k] + _nu[b] + _delta[cell_index]));
+
+			cell_index++;
+		}
+	}
+
+	if (logr > log(_rng.runif())) {
+		res = alpha_iter;
+	}
+	else {
+		res = _alpha;
+	}
+
+	return res;
+}
+
+void _update_l(int _K,//dimension
+	double _p, double _tau0, double _tau1,//prior
+	double *_beta, singlerng _rng,//parameter
+	int *_L) {
+	//int ind_beta;
+	double log_rat;
+	for (int k = 1; k < _K; k++) {
+		//ind_beta = j + k * _G;
+		log_rat = 0.0; //the odds ratio of L_k = 1
+		log_rat += log(_p) - log(1 - _p);
+		log_rat += -log(_tau1) / 2.0 + log(_tau0) / 2.0;
+		log_rat += -pow(_beta[k], 2) / 2.0 / _tau1;
+		log_rat += pow(_beta[k], 2) / 2.0 / _tau0;
+		_L[k] = rand_Ber(1.0 / (1.0 + exp(-log_rat)), _rng);
+	}
+}
+
+void _update_beta(int _B, int *_nb, int _K,//dimension 
+	double _tau0, double _tau1, int *_L,//prior
+	int *_W, double _alpha, double *_nu, double *_delta, double *_phi, //parameter 	
+	int *_X, singlerng _rng,//latent variable
+	double *_beta) {
+
+	//index the row of (b,i)
+	int cell_index, k;
+	double *beta_iter = new double[_K];
+	double *logr = new double[_K];
+
+	for (k = 1; k < _K; k++) {
+		//symmetric proposal
+		beta_iter[k] = _rng.rnorm(_beta[k], 0.1);
+		logr[k] = 0.0;
+
+		//prior
+		if (_L[k] == 1) {
+			logr[k] = logr[k] - pow(beta_iter[k], 2.0) / 2 / _tau1 + pow(_beta[k], 2.0) / 2 / _tau1;
+		}
+		else {
+			logr[k] = logr[k] - pow(beta_iter[k], 2.0) / 2 / _tau0 + pow(_beta[k], 2.0) / 2 / _tau0;
+		}
+	}
+
+	cell_index = 0;
+	for (int b = 0; b < _B; b++) {
+		for (int i = 0; i < _nb[b]; i++) {
+			k = _W[cell_index];
+			//numerator
+			logr[k] += beta_iter[k] * _X[cell_index];
+			logr[k] += -(_phi[b] + _X[cell_index]) * log(_phi[b] + exp(_alpha + beta_iter[k] + _nu[b] + _delta[cell_index]));
+			//denomerator
+			logr[k] += -_beta[k] * _X[cell_index];
+			logr[k] += (_phi[b] + _X[cell_index]) * log(_phi[b] + exp(_alpha + _beta[k] + _nu[b] + _delta[cell_index]));
+
+			cell_index++;
+		}
+	}
+
+	for (k = 1; k < _K; k++) {
+		if (logr[k] > log(_rng.runif())) {
+			_beta[k] = beta_iter[k];
+		}
+	}
+	delete[] logr;
+	delete[] beta_iter;
+}
+
+void _update_nu(int _B, int *_nb,
+	double *_mu_c, double _sigma_c,//prior
+	int *_W, double _alpha, double *_beta, double *_delta, double *_phi,//parameter
+	int *_X, singlerng _rng, //latent variable
+	double *_nu) {
+
+	//int ind, ind_beta, ind_nu, ind_n;
+
+	int cell_index = _nb[0];
+	double nu_iter;
+	double logr;
+	int k;
+
+	for (int b = 1; b < _B; b++) {
+		//ind_nu = b + j * _B;
+
+		//proposal
+		nu_iter = _rng.rnorm(_nu[b], 0.1);
+		logr = 0.0;
+
+		//prior
+		logr = logr - pow(nu_iter - _mu_c[b], 2.0) / 2 / pow(_sigma_c, 2.0) + pow(_nu[b] - _mu_c[b], 2.0) / 2 / pow(_sigma_c, 2.0);
+
+		for (int i = 0; i < _nb[b]; i++) {
+
+			//ind_beta = j + _w[ind_n] * _G;
+			//ind = j * _N + ind_n;
+			k = _W[cell_index];
+
+			//numerator
+			logr += nu_iter * _X[cell_index];
+			logr += -(_phi[b] + _X[cell_index]) * log(_phi[b] + exp(_alpha + _beta[k] + nu_iter + _delta[cell_index]));
+
+			//denomerator
+			logr += -_nu[b] * _X[cell_index];
+			logr += (_phi[b] + _X[cell_index]) * log(_phi[b] + exp(_alpha + _beta[k] + _nu[b] + _delta[cell_index]));
+
+			cell_index++;
+
+			//ind_n = ind_n + 1;
+		}
+
+		if (logr > log(_rng.runif())) {
+			_nu[b] = nu_iter;
+		}
+	}
+}
+
+void _update_phi(int _B, int *_nb,
+	double *_phi_prior,//prior
+	double *_logmu,//parameter
+	int *_X, singlerng _rng, //latent variable
+	double *_phi) {
+	//int ind, ind_nu, ind_n;
+	int cell_index = 0;
+	double phi_iter, logr;
+
+	for (int b = 0; b < _B; b++) {
+
+		phi_iter = _rng.rgamma(_phi[b], 1);
+		logr = 0.0;
+
+		for (int i = 0; i < _nb[b]; i++) {
+
+			//numerator
+			logr += lgamma(phi_iter + _X[cell_index]) - lgamma(phi_iter);
+			logr += phi_iter * log(phi_iter) - (phi_iter + _X[cell_index]) * log(phi_iter + exp(_logmu[cell_index]));
+
+			//denomerator
+			logr += -lgamma(_phi[b] + _X[cell_index]) + lgamma(_phi[b]);
+			logr += -_phi[b] * log(_phi[b]) + (_phi[b] + _X[cell_index]) * log(_phi[b] + exp(_logmu[cell_index]));
+
+			cell_index++;
+		}
+
+		//prior
+		logr += (_phi_prior[0] - 1) * log(phi_iter) - _phi_prior[1] * phi_iter;
+		logr += -(_phi_prior[0] - 1) * log(_phi[b]) + _phi_prior[1] * _phi[b];
+
+		//proposal
+		logr += (phi_iter - 1.0) * log(_phi[b]) + phi_iter - lgamma(phi_iter);
+		logr += -(_phi[b] - 1.0) * log(phi_iter) - _phi[b] + lgamma(_phi[b]);
+
+		if (logr > log(_rng.runif())) {
+			_phi[b] = phi_iter;
+		}
+	}
+}
+
+#else
 
 int rand_cate(double* _prop, omprng _rng){
     int res = 0;
@@ -133,20 +566,7 @@ void rand_Dir(double *_xi, int _K, omprng _rng, double *_pi){
     delete [] rn_gam;
 }
 
-void _update_logmu(int _B, int* _nb,
-	int *_W, double _alpha, double* _beta, double* _nu, double* _delta,
-	double* _logmu) {
-	int cell_index = 0;
-	int k;
-	//auxiliry
-	for (int b = 0; b < _B; b++) {
-		for (int i = 0; i < _nb[b]; i++) {
-			k = _W[cell_index];
-			_logmu[cell_index] = _alpha + _beta[k] + _nu[b] + _delta[cell_index];
-			cell_index++;
-		}
-	}
-}
+
 
 void _update_zx(int _B, int* _nb,
 	double **_gamma, double *_phi, double *_logmu,
@@ -480,6 +900,7 @@ void _update_phi(int _B, int *_nb,
 		}
 	}
 }
+#endif
 
 //Max value in a vector
 double vec_max(double* vec,int n){
@@ -594,11 +1015,25 @@ void BUSseq_MCMC(int *Y_vec, int *Dim, int *seed, int *nc,
 	for (int g = 0; g < G; g++) {
 		Y[g] = &Y_vec[g * N];// for parallel G
 	}
+
+
+
+#ifdef __APPLE__
+
+		// Set the seed for RNG
+	singlerng MCMC_Rng;
+	MCMC_Rng.fixedSeed(seed[0]);
+
+#else
+
 	// Set the seed for RNG
 	omprng MCMC_Rng;
 	MCMC_Rng.fixedSeed(seed[0]);
 	// Set the number of cores for parallel
 	omp_set_num_threads(nc[0]);
+
+#endif
+
 	// Set the number of iterations
 	int iter_max = iter_infor[0]; // the overall iteration number 
 	int iter_out = iter_infor[1]; // the number of iterations to print the posterior sampling 
@@ -607,16 +1042,26 @@ void BUSseq_MCMC(int *Y_vec, int *Dim, int *seed, int *nc,
 	string output_dir(dir_output[0]);
 	output_dir = output_dir + "/";
 
-#ifdef linux
-int check = mkdir(output_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-#endif
+#ifdef __linux__
 
-#ifdef _WIN32
+int check = mkdir(output_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+if(check == 0){
+	Rprintf("The directory of saving posterior sampling is created.");
+}
+
+#elif _WIN32
 if (0 != access(output_dir.c_str(), 0))
     {
         // if this folder not exist, create a new one.
         mkdir(output_dir.c_str()); 
+		Rprintf("The directory of saving posterior sampling is created.");
+
     }
+#elif  __APPLE__
+int check = mkdir(output_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+if(check == 0){
+	Rprintf("The directory of saving posterior sampling is created.");
+}
 #endif
 	
 	string out_file;
@@ -643,7 +1088,7 @@ if (0 != access(output_dir.c_str(), 0))
 	double sigma_d = hyper[11];
 	// for phi Gamma prior
 	double *phi_prior = &(hyper[12]);
-	auto start_overall = chrono::system_clock::now();
+	// auto start_overall = chrono::system_clock::now();
 	////////////////////////////////
 	// 1. Initialize parameters //
 	////////////////////////////////
@@ -661,12 +1106,14 @@ if (0 != access(output_dir.c_str(), 0))
 	// cell type indicator
 	int *W = new int[N];
 	int *pointer_w = W;
+
 	for (int b = 0; b < B; b++) {
 		for (int i = 0; i < nb[b]; i++) {
 			*pointer_w = rand_cate(prop[b], MCMC_Rng);
 			pointer_w++;
 		}
 	}
+
 	// cell-specific effect
 	double *delta = new double[N];
 	double *mu_d = new double[N];
@@ -797,6 +1244,7 @@ if (0 != access(output_dir.c_str(), 0))
 	}
 	// intrinsic gene proportion and variance of non-intrinsic genes
 	double p, tau0; // p and tau0 as well as tau1
+
 	p = MCMC_Rng.runif(0, 0.5);
 	tau0 = 0.005;
 	// intrinsic gene indicators
@@ -813,6 +1261,7 @@ if (0 != access(output_dir.c_str(), 0))
 			L[g][k] = rand_Ber(1 / (1 + exp(-log_rat)), MCMC_Rng);
 		}
 	}
+
 	// cout << "Allocate memory for recording the posterior sampling." << endl;
 	// Allocate memory to store posterior sampling
 	double **alpha_post = new double*[iter_out];
@@ -862,12 +1311,26 @@ if (0 != access(output_dir.c_str(), 0))
 	for (int g = 0; g < G; g++) {
 		logmu[g] = new double[N];
 	}
+
+#ifdef __APPLE__
+
+	for (int g = 0; g < G; g++) {
+		_update_logmu(B, nb,
+			W, alpha[g], beta[g], nu[g], delta,//parameter
+			logmu[g]);
+	}
+
+#else 
+
 #pragma omp parallel for
 	for (int g = 0; g < G; g++) {
 		_update_logmu(B, nb,
 			W, alpha[g], beta[g], nu[g], delta,//parameter
 			logmu[g]);
 	}
+
+#endif
+
 	// divide the overall iterations into several parts with length iter_out
 	// to control the RAM occupation
 	int out_times = (iter_max - 1) / iter_out + 1;
@@ -907,24 +1370,502 @@ if (0 != access(output_dir.c_str(), 0))
 		if (iter_noupdate > iter_num) {
 			iter_noupdate = iter_noupdate - iter_num;
 		}
+
 		// cout << "Starting " << t * iter_out + 1 << "-" << t * iter_out + iter_num << " iterations for the " << t + 1 << "-th output." << endl;
-		auto start_MCMC = chrono::system_clock::now();
+		// auto start_MCMC = chrono::system_clock::now();
+
+#ifdef __APPLE__
+
+for (int iter = 0; iter < iter_num; iter++) {
+	if (All_Drop) {
+		/////////////////////////////////////
+		//  1) update z_{big} and x_{big}  //
+
+		for (int g = 0; g < G; g++) {
+					_update_zx(B, nb,
+						gamma, phi[g], logmu[g],
+						Y[g], MCMC_Rng, X[g], Z[g]);
+		}
+
+		/////////////////////////////////////////////////////
+		//  2) update gamma_{b0} and gamma_{b1} // 
+
+		// gamma_{b0}        
+		cell_index = 0;
+		for (int b = 0; b < B; b++) {
+
+			gamma_iter = MCMC_Rng.rnorm(gamma[b][0], 0.1);
+
+			//prior
+			logr = -pow(gamma_iter, 2.0) / 2 / sigma_zsq + pow(gamma[b][0], 2.0) / 2 / sigma_zsq;
+
+			for (int i = 0; i < nb[b]; i++) {
+
+				// auxiliary variable to update gamma
+				double temp_pres, temp_iter;
+
+				for (int g = 0; g < G; g++) {
+
+					//numerator
+					temp_iter = gamma_iter + X[g][cell_index] * gamma[b][1];//prevent temp_iter is extremely large
+					if (temp_iter > 0) {
+						logr += gamma_iter * Z[g][cell_index] - temp_iter - log(1 + exp(-temp_iter));
+					}
+					else {
+						logr += gamma_iter * Z[g][cell_index] - log(1 + exp(temp_iter));
+					}
+
+					//denomerator
+					temp_pres = gamma[b][0] + X[g][cell_index] * gamma[b][1];
+					if (temp_pres > 0) {
+						logr += -gamma[b][0] * Z[g][cell_index] + temp_pres + log(1 + exp(-temp_pres));
+					}
+					else {
+						logr += -gamma[b][0] * Z[g][cell_index] + log(1 + exp(temp_pres));
+					}
+				}
+				cell_index++;
+			}// end of i
+
+			// cout << " logr = " << logr << endl;
+					if (logr > log(MCMC_Rng.runif())) {
+						gamma[b][0] = gamma_iter;
+					}
+		}// end of b
+
+		// gamma_{b1}
+		cell_index = 0;
+		for (int b = 0; b < B; b++) {
+			//pro posal
+			gamma_iter = -MCMC_Rng.rgamma(-10 * gamma[b][1], 0.1);
+			//prior
+			logr = (gamma_prior[0] - 1) * (log(gamma_iter / gamma[b][1])) + gamma_prior[1] * (gamma_iter - gamma[b][1]);
+			//proposal
+			//numerator
+			logr = logr - lgamma(-10 * gamma_iter) + (-10 * gamma_iter - 1) * log(-gamma[b][1]) - 10 * gamma_iter * log(10) + 10 * gamma[b][1];
+			//denomerator
+			logr = logr + lgamma(-10 * gamma[b][1]) - (-10 * gamma[b][1] - 1) * log(-gamma_iter) + 10 * gamma[b][1] * log(10) - 10 * gamma_iter;
+
+
+			for (int i = 0; i < nb[b]; i++) {
+
+				// auxiliary variable to update gamma
+				double temp_pres, temp_iter;
+
+				for (int g = 0; g < G; g++) {
+					//numerator
+					temp_iter = gamma[b][0] + X[g][cell_index] * gamma_iter;//prevent temp_iter is extremely large
+					if (temp_iter > 0) {
+						logr += X[g][cell_index] * gamma_iter * Z[g][cell_index] - temp_iter - log(1 + exp(-temp_iter));
+					}
+					else {
+						logr += X[g][cell_index] * gamma_iter * Z[g][cell_index] - log(1 + exp(temp_iter));
+					}
+					//denomerator
+					temp_pres = gamma[b][0] + X[g][cell_index] * gamma[b][1];
+					if (temp_pres > 0) {
+						logr += -X[g][cell_index] * gamma[b][1] * Z[g][cell_index] + temp_pres + log(1 + exp(-temp_pres));
+					}
+					else {
+						logr += -X[g][cell_index] * gamma[b][1] * Z[g][cell_index] + log(1 + exp(temp_pres));
+					}
+				}
+
+				cell_index++;
+			}//end of i
+
+			if (logr > log(MCMC_Rng.runif())) {
+				gamma[b][1] = gamma_iter;
+			}
+		}// end of b
+	}
+	else {
+		/////////////////////////////////////
+		//  1) update z_{big} and x_{big}  //
+		// auto start_zx = chrono::system_clock::now();
+				for (int g = 0; g < G; g++) {
+					_update_zx_optional(B, nb, Drop_ind,
+						gamma, phi[g], logmu[g],
+						Y[g], MCMC_Rng,
+						X[g], Z[g]);
+				}
+		//////////////////////////////////////////////////////
+		//  2) update gamma_{b0} and gamma_{b1} // 
+		// gamma_{b0}        
+		cell_index = 0;
+		for (int b = 0; b < B; b++) {
+			if (Drop_ind[b]) {
+				gamma_iter = MCMC_Rng.rnorm(gamma[b][0], 0.1);
+				//prior
+				logr = -pow(gamma_iter, 2.0) / 2 / sigma_zsq + pow(gamma[b][0], 2.0) / 2 / sigma_zsq;
+
+				for (int i = 0; i < nb[b]; i++) {
+
+					// auxiliary variable to update gamma
+					double temp_pres, temp_iter;
+
+					for (int g = 0; g < G; g++) {
+
+						//numerator
+						temp_iter = gamma_iter + X[g][cell_index] * gamma[b][1];//prevent temp_iter is extremely large
+						if (temp_iter > 0) {
+							logr += gamma_iter * Z[g][cell_index] - temp_iter - log(1 + exp(-temp_iter));
+						}
+						else {
+							logr += gamma_iter * Z[g][cell_index] - log(1 + exp(temp_iter));
+						}
+
+						//denomerator
+						temp_pres = gamma[b][0] + X[g][cell_index] * gamma[b][1];
+						if (temp_pres > 0) {
+							logr += -gamma[b][0] * Z[g][cell_index] + temp_pres + log(1 + exp(-temp_pres));
+						}
+						else {
+							logr += -gamma[b][0] * Z[g][cell_index] + log(1 + exp(temp_pres));
+						}
+					}
+					cell_index++;
+				}// end of i
+										
+				if (logr > log(MCMC_Rng.runif())) {
+					gamma[b][0] = gamma_iter;
+				}
+				else {
+					cell_index = cell_index + nb[b];
+				}
+			}
+		}// end of b
+		// gamma_{b1}
+		cell_index = 0;
+		for (int b = 0; b < B; b++) {
+			if (Drop_ind[b]) {
+				//pro posal
+				gamma_iter = -MCMC_Rng.rgamma(-10 * gamma[b][1], 0.1);
+				//if(gamma_iter < 0){
+//prior
+				logr = (gamma_prior[0] - 1) * (log(gamma_iter / gamma[b][1])) + gamma_prior[1] * (gamma_iter - gamma[b][1]);
+				//proposal
+//numerator
+				logr = logr - lgamma(-10 * gamma_iter) + (-10 * gamma_iter - 1) * log(-gamma[b][1]) - 10 * gamma_iter * log(10) + 10 * gamma[b][1];
+				//denomerator
+				logr = logr + lgamma(-10 * gamma[b][1]) - (-10 * gamma[b][1] - 1) * log(-gamma_iter) + 10 * gamma[b][1] * log(10) - 10 * gamma_iter;
+
+				for (int i = 0; i < nb[b]; i++) {
+
+					// auxiliary variable to update gamma
+					double temp_pres, temp_iter;
+
+					for (int g = 0; g < G; g++) {
+						//numerator
+						temp_iter = gamma[b][0] + X[g][cell_index] * gamma_iter;//prevent temp_iter is extremely large
+						if (temp_iter > 0) {
+							logr += X[g][cell_index] * gamma_iter * Z[g][cell_index] - temp_iter - log(1 + exp(-temp_iter));
+						}
+						else {
+							logr += X[g][cell_index] * gamma_iter * Z[g][cell_index] - log(1 + exp(temp_iter));
+						}
+						//denomerator
+						temp_pres = gamma[b][0] + X[g][cell_index] * gamma[b][1];
+						if (temp_pres > 0) {
+							logr += -X[g][cell_index] * gamma[b][1] * Z[g][cell_index] + temp_pres + log(1 + exp(-temp_pres));
+						}
+						else {
+							logr += -X[g][cell_index] * gamma[b][1] * Z[g][cell_index] + log(1 + exp(temp_pres));
+						}
+					}
+
+					cell_index++;
+				}//end of i
+
+				// cout << " logr = " << logr << endl;
+				if (logr > log(MCMC_Rng.runif())) {
+					gamma[b][1] = gamma_iter;
+				}
+			}
+			else {
+				cell_index = cell_index + nb[b];
+			}
+
+		}
+	}
+	////////////////////////////////////
+	//  3) update alpha_g by MH  //
+			for (int g = 0; g < G; g++) {
+				alpha[g] = _update_alpha(B, nb,//dimension
+					mu_a[g], sigma_a,//prior
+					W, alpha[g], beta[g], nu[g], delta, phi[g], //parameter
+					X[g], MCMC_Rng);
+
+	}
+	////////////////////////
+//  4) update L_gk  //
+	for (int g = 0; g < G; g++) {
+				_update_l(K,//dimension
+					p, tau0, tau1,//prior
+					beta[g], MCMC_Rng,//parameter
+					L[g]);
+	}
+	/////////////////////////////////////
+//  5) update p and 6) update tau0  //
+	if (IND_UPDATE_PTAU0 == 1) {
+		// cout << "Update p and tau0." << endl;
+		// auto start_pt = chrono::system_clock::now();
+		int sum_L = 0;
+		double sum_beta = 0.0;
+
+		for (int g = 0; g < G; g++) {
+
+			for (int k = 1; k < K; k++) {
+				sum_L += L[g][k];
+				if (L[g][k] == 0) {
+					sum_beta += pow(beta[g][k], 2.0);
+				}
+			}
+		}
+
+				p_postdist[0] = p_prior[0] + sum_L;
+				p_postdist[1] = p_prior[1] + G * (K - 1) - sum_L;
+				p = MCMC_Rng.rbeta(p_postdist[0], p_postdist[1]);
+
+
+				tau0_postdist[0] = tau0_prior[0] + (G * (K - 1) - sum_L) / 2.0;
+				tau0_postdist[1] = tau0_prior[1] + sum_beta / 2.0;
+				tau0 = 1.0 / MCMC_Rng.rgamma(tau0_postdist[0], 1.0 / tau0_postdist[1]);
+
+	}
+	///////////////////////
+// 7) update beta  //
+			for (int g = 0; g < G; g++) {
+				_update_beta(B, nb, K,//dimension 
+					tau0, tau1, L[g],//prior
+					W, alpha[g], nu[g], delta, phi[g], //parameter 	
+					X[g], MCMC_Rng,//latent variable
+					beta[g]);
+			}
+	///////////////////
+	// 8) update nu  //
+			for (int g = 0; g < G; g++) {
+				_update_nu(B, nb,
+					mu_c, sigma_c,//prior
+					W, alpha[g], beta[g], delta, phi[g],//parameter
+					X[g], MCMC_Rng, //latent variable
+					nu[g]);
+			}
+	/////////////////////
+// 9) update delta /
+	cell_index = 0;
+	for (int b = 0; b < B; b++) {
+		for (int i = 0; i < nb[b]; i++) {
+			if (i > 0) {//let ind_n be the cell index
+				delta_iter = MCMC_Rng.rnorm(delta[cell_index], 0.1);
+				logr = 0.0;
+				//prior
+				logr += -pow(delta_iter - mu_d[cell_index], 2.0) / 2 / pow(sigma_d, 2.0);
+				logr += pow(delta[cell_index] - mu_d[cell_index], 2.0) / 2 / pow(sigma_d, 2.0);
+
+				for (int g = 0; g < G; g++) {
+					int k = W[cell_index];
+					//numerator
+					logr += delta_iter * X[g][cell_index];
+					logr += -(phi[g][b] + X[g][cell_index]) * log(phi[g][b] + exp(alpha[g] + beta[g][k] + nu[g][b] + delta_iter));
+					//denomerator
+					logr += -delta[cell_index] * X[g][cell_index];
+					logr += (phi[g][b] + X[g][cell_index]) * log(phi[g][b] + exp(alpha[g] + beta[g][k] + nu[g][b] + delta[cell_index]));
+
+				}
+
+				if (logr > log(MCMC_Rng.runif())) {
+					delta[cell_index] = delta_iter;
+				}
+			}
+			cell_index++;
+		}
+	}
+
+	for (int g = 0; g < G; g++) {
+		_update_logmu(B, nb,
+			W, alpha[g], beta[g], nu[g], delta,//parameter
+			logmu[g]);
+	}
+	/////////////////////
+// 10) update phi  //
+			for (int g = 0; g < G; g++) {
+				_update_phi(B, nb,
+					phi_prior,//prior
+					logmu[g],//parameter
+					X[g], MCMC_Rng, //latent variable
+					phi[g]);
+			}
+	///////////////////
+// 11) update w  //
+	cell_index = 0;
+	for (int b = 0; b < B; b++) {
+		for (int i = 0; i < nb[b]; i++) {
+			w_proposal = rand_cate(proposal_pi, MCMC_Rng);
+			w_current = W[cell_index];
+
+			if (w_proposal != w_current) {
+				log_proposal = log(prop[b][w_proposal]);
+				log_current = log(prop[b][w_current]);
+
+				//calculate the posterior ratio in log scale
+				double temp_logmu;
+
+				for (int g = 0; g < G; g++) {
+
+
+					temp_logmu = alpha[g] + beta[g][w_proposal] + nu[g][b] + delta[cell_index];
+					log_proposal += beta[g][w_proposal] * X[g][cell_index];
+					log_proposal += -(phi[g][b] + X[g][cell_index]) * log(phi[g][b] + exp(temp_logmu));
+
+					//ind_beta = j + w_current * _G;
+					temp_logmu = alpha[g] + beta[g][w_current] + nu[g][b] + delta[cell_index];
+					log_current += beta[g][w_current] * X[g][cell_index];
+					log_current += -(phi[g][b] + X[g][cell_index]) * log(phi[g][b] + exp(temp_logmu));
+
+				}
+
+				logr = log_proposal - log_current;
+				if (logr > log(MCMC_Rng.runif())) {
+					W[cell_index] = w_proposal;
+				}
+			}
+
+			cell_index++;
+		}
+	}
+
+	for (int g = 0; g < G; g++) {
+		_update_logmu(B, nb,
+			W, alpha[g], beta[g], nu[g], delta,//parameter
+			logmu[g]);
+	}
+	////////////////////////
+//  12) update pi_bk  //
+	cell_index = 0;
+	for (int b = 0; b < B; b++) {
+		for (int k = 0; k < K; k++) {
+			count_w[k] = xi;
+		}
+		for (int i = 0; i < nb[b]; i++) {
+			count_w[W[cell_index]] = count_w[W[cell_index]] + 1.0;
+			cell_index++;
+		}
+				rand_Dir(count_w, K, MCMC_Rng, prop[b]);
+	}
+	if (iter == iter_noupdate - 1) {
+		IND_UPDATE_PTAU0 = 1;
+	}
+	/////////////////////////////////////////
+//  13) Record the posterior sampling  //
+	for (int g = 0; g < G; g++) {
+		alpha_post[iter][g] = alpha[g];
+	}
+
+	q = 0;
+	for (int g = 0; g < G; g++) {
+		for (int k = 0; k < K; k++) {
+			beta_post[iter][q] = beta[g][k];
+			q++;
+		}
+	}
+
+	q = 0;
+	for (int g = 0; g < G; g++) {
+
+		for (int b = 0; b < B; b++) {
+			nu_post[iter][q] = nu[g][b];
+			q++;
+		}
+	}
+
+	for (int i = 0; i < N; i++) {
+		delta_post[iter][i] = delta[i];
+	}
+	q = 0;
+	for (int b = 0; b < B; b++) {
+		gamma_post[iter][q] = gamma[b][0];
+		q++;
+		gamma_post[iter][q] = gamma[b][1];
+		q++;
+	}
+
+	q = 0;
+	for (int g = 0; g < G; g++) {
+		for (int b = 0; b < B; b++) {
+			phi_post[iter][q] = phi[g][b];
+			q++;
+		}
+	}
+	
+	q = 0;
+	for (int b = 0; b < B; b++) {
+		for (int k = 0; k < K; k++) {
+			pi_post[iter][q] = prop[b][k];
+			q++;
+		}
+	}
+	for (int i = 0; i < N; i++) {
+		w_post[iter][i] = W[i];
+	}
+	p_post[iter] = p;
+	tau0_post[iter] = tau0;
+
+	q = 0;
+	for (int g = 0; g < G; g++) {
+		for (int k = 0; k < K; k++) {
+			l_post[iter][q] = L[g][k];
+			q++;
+		}
+	}
+	
+
+		  // output the progress bar
+	if (iter % 100 == 0) {
+		progress = tot_iter / iter_max;
+		int pos = barWidth * progress;
+		Rprintf("[");
+		for (int i = 0; i < barWidth; ++i) {
+			if (i < pos) {
+				Rprintf("=");
+			}
+			else if (i == pos) {
+				Rprintf(">");
+			}
+			else {
+				Rprintf(" ");
+			}
+		}
+		Rprintf("] Finish %.2fk/%.2fk iterations.\r", tot_iter / 1000.0, iter_max / 1000.0);
+		// fflush(stdout);
+	}
+	tot_iter = tot_iter + 1.0;
+
+}
+
+#else
+
 		for (int iter = 0; iter < iter_num; iter++) {
 			if (All_Drop) {
 				/////////////////////////////////////
 				//  1) update z_{big} and x_{big}  //
+
+
 #pragma omp parallel for
 				for (int g = 0; g < G; g++) {
 					_update_zx(B, nb,
 						gamma, phi[g], logmu[g],
 						Y[g], MCMC_Rng, X[g], Z[g]);
 				}
+
+
 				/////////////////////////////////////////////////////
 				//  2) update gamma_{b0} and gamma_{b1} // 
 
 				// gamma_{b0}        
 				cell_index = 0;
 				for (int b = 0; b < B; b++) {
+
 					gamma_iter = MCMC_Rng.rnorm(gamma[b][0], 0.1);
 
 					//prior
@@ -1450,7 +2391,6 @@ if (0 != access(output_dir.c_str(), 0))
 					}
 				}
 			}
-			// cout <<  "In " << iter << "-th iterations, the random number is " << MCMC_Rng.runif(0,1) << endl;
 
 	              // output the progress bar
                if(iter % 100 == 0){
@@ -1472,8 +2412,11 @@ if (0 != access(output_dir.c_str(), 0))
 		       tot_iter = tot_iter + 1.0;
 
 		}
-		auto end_MCMC = chrono::system_clock::now();
-		chrono::duration<double> elapsed_seconds_MCMC = end_MCMC - start_MCMC;
+#endif
+
+
+		// auto end_MCMC = chrono::system_clock::now();
+		//chrono::duration<double> elapsed_seconds_MCMC = end_MCMC - start_MCMC;
 		// cout << "elapsed time of " << iter_num << " iterations of MCMC sampling for the " << t + 1 << "-th output is: " << elapsed_seconds_MCMC.count() << "s" << endl;
 		///////////////////////////////////
 		// output the posterior sampling //
@@ -1617,9 +2560,10 @@ if (0 != access(output_dir.c_str(), 0))
     Rprintf("] Finish %.2fk/%.2fk iterations.\n\n", tot_iter/1000.0, iter_max/1000.0);
     // fflush(stdout);
 	
-	auto end_overall = chrono::system_clock::now();
-	chrono::duration<double> elapsed_seconds_overall = end_overall - start_overall;
+	//auto end_overall = chrono::system_clock::now();
+	//chrono::duration<double> elapsed_seconds_overall = end_overall - start_overall;
 	// cout << "elapsed time of the overall algorithm is: " << elapsed_seconds_overall.count() << "s" << endl;
+
 	//free the memory
 	delete[] count_w;
 	delete[] proposal_pi;
@@ -1745,8 +2689,15 @@ void BUSseq_inference(int *Y_vec, int *Dim,
 		Y[g] = &Y_vec[g * N];// for parallel G
 	}
 
+#ifdef _WIN32 
 	// Set the number of cores for parallel
 	omp_set_num_threads(nc[0]);
+#endif
+
+#ifdef __linux__ 
+	// Set the number of cores for parallel
+	omp_set_num_threads(nc[0]);
+#endif
 
 	// Set the number of iterations
 	int iter_max = iter_infor[0]; // the overall iteration number 
@@ -1757,24 +2708,33 @@ void BUSseq_inference(int *Y_vec, int *Dim,
 	string output_dir(dir_output[0]);
 	output_dir = output_dir + "/";
 
-#ifdef linux
-int check = mkdir(output_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-#endif
-
+/*
 #ifdef _WIN32
+
 if (0 != access(output_dir.c_str(), 0))
     {
         // if this folder not exist, create a new one.
         mkdir(output_dir.c_str()); 
+		Rprintf("The directory of saving posterior inference is created.");
+
     }
+
+#else
+
+int check = mkdir(output_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+if(check == 0){
+	Rprintf("The directory of saving posterior inference is created.");
+}
+
 #endif
+*/
 
 	string out_file;
 
 	// file variable to output the posterior sampling
 	ofstream post_File;
 
-	auto start_overall = chrono::system_clock::now();
+	//auto start_overall = chrono::system_clock::now();
 	////////////////////////////
 	// 1. Posterior inference //
 	////////////////////////////
@@ -2080,21 +3040,133 @@ if (0 != access(output_dir.c_str(), 0))
 
 	// Calculate likelihood and BIC
 
-	omprng Loglike_Rng;
-	Loglike_Rng.fixedSeed(12345);// for Monte carlo estimation of E(exp(gamma_0+gamma_1x)/(1+exp(gamma_0+gamma_1x)))
 	int cell_index;
 	double loglike_obs;
 	// auxiliary variables
 	double *lpy = new double[K]; // log(pi_bk prod_{g=1}^G Pr(Y_big = y_big | Theta ))
 	double lpy_max, sum_lpy; // lr0_temp, sum_lr0, lpy_max, sum_lpy;
 	// Set the number of cores for parallel
-	omp_set_num_threads(nc[0]);
-
 	// Calculate BIC 
 
-	auto start_BIC = chrono::system_clock::now();
+	// auto start_BIC = chrono::system_clock::now();
 	loglike_obs = 0.0;
 	cell_index = 0;
+
+
+
+#ifdef __APPLE__
+
+for (int b = 0; b < B; b++) {
+	if (Drop_ind[b]) {
+		for (int i = 0; i < nb[b]; i++) {
+			for (int k = 0; k < K; k++) {
+				lpy[k] = log(pi_est[b * K + k]);
+
+				int read, x_max;
+				double logmubikg, pbgk, logp, log1mp, lr0_temp, sum_lr0;
+
+				for (int g = 0; g < G; g++) {
+					read = Y[g][cell_index];
+					logmubikg = alpha_est[g] + beta_est[g * K + k] + nu_est[g * B + b] + delta_est[cell_index];
+					pbgk = exp(logmubikg) / (exp(logmubikg) + phi_est[g * B + b]);
+					if (pbgk < exp(-100)) {
+						logp = -100 * log(10.0);
+						log1mp = log(1 - pbgk);
+					}
+					else if (1 - pbgk < exp(-100)) {
+						logp = log(pbgk);
+						log1mp =-100 * log(10.0);
+					}
+					else {
+						logp = log(pbgk);
+						log1mp = log(1 - pbgk);
+					}
+
+					if (read > 0) {
+						lpy[k] += -log(1 + exp(gamma_est[b * 2] + gamma_est[b * 2 + 1] * read));
+						lpy[k] += lgamma(phi_est[g * B + b] + read) - lgamma(read + 1) - lgamma(phi_est[g * B + b]);
+						lpy[k] += read * logp + phi_est[g * B + b] * log1mp;
+					}
+					else {
+						x_max = (int)3 * exp(logmubikg);
+						lr0_temp = phi_est[g * B + b] * log1mp; //x=0
+						sum_lr0 = lr0_temp;
+
+						for (int x = 1; x < x_max; x++) {
+							lr0_temp = gamma_est[b * 2] + gamma_est[b * 2 + 1] * x - log(1 + exp(gamma_est[b * 2] + gamma_est[b * 2 + 1] * x));
+							lr0_temp += lgamma(phi_est[g * B + b] + x) - lgamma(x + 1) - lgamma(phi_est[g * B + b]);
+							lr0_temp += x * logp + phi_est[g * B + b] * log1mp;
+							if (lr0_temp > sum_lr0) {
+								sum_lr0 = lr0_temp + log(1 + exp(sum_lr0 - lr0_temp));
+							}
+							else {
+								sum_lr0 = sum_lr0 + log(1 + exp(lr0_temp - sum_lr0));
+							}
+						}
+						lpy[k] += sum_lr0;
+						//Rprintf("y %d %d %d = 0 and sum_lr0 is %f if the cell belongs to %d-th subtype.\n",b, i ,j ,sum_lr0, k);
+					}
+				}
+
+			}// end of k 
+			lpy_max = vec_max(lpy, K);
+			sum_lpy = 0.0;
+			for (int k = 0; k < K; k++) {
+				sum_lpy = sum_lpy + exp(lpy[k] - lpy_max);
+				//Rprintf("logproby[%d]=%f",k,lpy[k]);
+			}
+			loglike_obs += lpy_max + log(sum_lpy);
+			cell_index++;
+			// printf("Finish the %d-th cell, lpy_max= %f, sum_lpy = %f, loglike = %f.\n", cell_index, lpy_max, sum_lpy, loglike_obs);
+			}// end of i
+		}
+	else {
+		for (int i = 0; i < nb[b]; i++) {
+			for (int k = 0; k < K; k++) {
+				lpy[k] = log(pi_est[b * K + k]);
+			}
+			for (int k = 0; k < K; k++) {
+				// auto start_bik = chrono::system_clock::now();
+
+				int read;
+				double logmubikg, pbgk, logp, log1mp;
+
+				for (int g = 0; g < G; g++) {
+					read = Y[g][cell_index];
+					logmubikg = alpha_est[g] + beta_est[g * K + k] + nu_est[g * B + b] + delta_est[cell_index];
+					pbgk = exp(logmubikg) / (exp(logmubikg) + phi_est[g * B + b]);
+					if (pbgk < pow(0.1, 100)) {
+						logp = -100 * log(10.0);
+						log1mp = log(1 - pbgk);
+					}
+					else if (1 - pbgk < pow(0.1, 100)) {
+						logp = log(pbgk);
+						log1mp = -100 * log(10.0);
+					}
+					else {
+						logp = log(pbgk);
+						log1mp = log(1 - pbgk);
+					}
+
+					lpy[k] += lgamma(phi_est[g * B + b] + read) - lgamma(read + 1) - lgamma(phi_est[g * B + b]);
+					lpy[k] += read * logp + phi_est[g * B + b] * log1mp;
+				}
+
+			}// end of k 
+			lpy_max = vec_max(lpy, K);
+			sum_lpy = 0.0;
+			for (int k = 0; k < K; k++) {
+				sum_lpy = sum_lpy + exp(lpy[k] - lpy_max);
+				//Rprintf("logproby[%d]=%f",k,lpy[k]);
+			}
+			loglike_obs += lpy_max + log(sum_lpy);
+			cell_index++;
+			// printf("Finish the %d-th cell, lpy_max= %f, sum_lpy = %f, loglike = %f.\n", cell_index, lpy_max, sum_lpy, loglike_obs);
+		}// end of i
+	} // end of else
+	}// end of b
+
+#else
 
 	for (int b = 0; b < B; b++) {
 		if (Drop_ind[b]) {
@@ -2115,12 +3187,12 @@ if (0 != access(output_dir.c_str(), 0))
 							logmubikg = alpha_est[g] + beta_est[g * K + k] + nu_est[g * B + b] + delta_est[cell_index];
 							pbgk = exp(logmubikg) / (exp(logmubikg) + phi_est[g * B+ b]);
 							if (pbgk < exp(-100)) {
-								logp = -100;
+								logp = -100 * log(10.0);
 								log1mp = log(1 - pbgk);
 							}
 							else if (1 - pbgk < exp(-100)) {
 								logp = log(pbgk);
-								log1mp = -100;
+								log1mp = -100 * log(10.0);
 							}
 							else {
 								logp = log(pbgk);
@@ -2178,8 +3250,8 @@ if (0 != access(output_dir.c_str(), 0))
 					// auto start_bik = chrono::system_clock::now();
 # pragma omp parallel
 					{
-						int read, x_max;
-						double logmubikg, pbgk, logp, log1mp, lr0_temp, sum_lr0, lpy_thread;
+						int read;
+						double logmubikg, pbgk, logp, log1mp, lpy_thread;
 						lpy_thread = 0.0;
 # pragma omp for
 						for (int g = 0; g < G; g++) {
@@ -2187,12 +3259,12 @@ if (0 != access(output_dir.c_str(), 0))
 							logmubikg = alpha_est[g] + beta_est[g * K + k] + nu_est[g * B + b] + delta_est[cell_index];
 							pbgk = exp(logmubikg) / (exp(logmubikg) + phi_est[g * B + b]);
 							if (pbgk < pow(0.1, 100)) {
-								logp = -100;
+								logp = -100 * log(10.0);
 								log1mp = log(1 - pbgk);
 							}
 							else if (1 - pbgk < pow(0.1, 100)) {
 								logp = log(pbgk);
-								log1mp = -100;
+								log1mp = -100 * log(10.0);
 							}
 							else {
 								logp = log(pbgk);
@@ -2221,14 +3293,16 @@ if (0 != access(output_dir.c_str(), 0))
 		} // end of else
 	}// end of b
 
+#endif
+
 	int NumBatchDrop = 0;
 	for (int b = 0; b < B; b++) {
 		NumBatchDrop = NumBatchDrop + Drop_ind[b];
 	}
 	BIC[0] = -2.0 * loglike_obs + log(G * N) * ((B + G) * K + 2 * NumBatchDrop + G * (B * 2 - 1) + N - B);
 	// all parameters of interest contain pi_{bk}, gamma_{b0(1)}, alpha_g, beta_{gk}, nu_{bg}, delta_{bi}, phi_{bg} 
-	auto end_BIC = chrono::system_clock::now();
-	chrono::duration<double> elapsed_seconds_BIC = end_BIC - start_BIC;
+	// auto end_BIC = chrono::system_clock::now();
+	// chrono::duration<double> elapsed_seconds_BIC = end_BIC - start_BIC;
 
 	delete[] sum_alpha_sq;
 	delete[] sum_beta_sq;

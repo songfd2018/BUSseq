@@ -66,8 +66,8 @@ scRNA-seq data\\ User's Guide}
   \noindent The input data should be an R list with the length equal to
   the number of batches. Each element of the list is a read count
   matrix, where each row represents a gene and each column corresponds 
-  to a cell. Specifically, assuming there are three batches, the R list
-  consists of three read count matrices with genes in rows and cells in
+  to a cell. Specifically, assuming there are two batches, the R list
+  consists of two read count matrices with genes in rows and cells in
   columns. In the following, we provide examples to illustrate the
   input formats, where \Robject{BUSseqfits\_example} is a sample 
   \Robject{BUSseqfits} object. We use the data list stored in this 
@@ -80,7 +80,7 @@ scRNA-seq data\\ User's Guide}
   CountData <- BUSseqfits_example$CountData_raw
   class(CountData)
   
-  #The length of the list is three, so we have three batches
+  #The length of the list is two, so we have two batches
   length(CountData)
   
   #Each element of the list is a matrix 
@@ -90,14 +90,13 @@ scRNA-seq data\\ User's Guide}
   #and each column corresponds to a cell
   dim(CountData[[1]])
   dim(CountData[[2]])
-  dim(CountData[[3]])
   
   #Peek at the read counts
   head(CountData[[1]][,1:4])
   @
     
-    \noindent The example data \Robject{CountData} consist of three 
-    batches. In total, 1,000 genes are measured. 
+    \noindent The example data \Robject{CountData} consist of two 
+    batches. In total, 300 genes are measured. 
   The number of cells in each batch is 150, respectively. Because it is
   a simulated dataset, we actually know that all of the cells come from
   4 cell types.\\
@@ -173,7 +172,7 @@ events.\\
     \noindent There is a message from the function 
     \Rfunction{celltypes} to remind the user of the format of 
     \Robject{celltyes\_est}. In this example, \Robject{celltypes\_est} 
-    is a list of length three, corresponding to the three batches in 
+    is a list of length two, corresponding to the two batches in 
     the study. 
   \Robject{celltypes\_est[[1]]} shows the cell type for each of the 
   150 cells in batch one. \\
@@ -229,7 +228,7 @@ one.
     
     #The estimated FDR, the first 500 genes are known intrinsic 
     #genes in the simulation setting.
-    false_discovery_ind <- !(intrinsic_gene_indices %in% 1:650)
+    false_discovery_ind <- !(intrinsic_gene_indices %in% 1:240)
     fdr_est <- sum(false_discovery_ind)/length(intrinsic_gene_indices)
     fdr_est
   @
@@ -339,41 +338,5 @@ one.
     intrinsic genes.}
   \end{figure}
   
-  \section{Model Selection using BIC}
-  If we have no prior knowledge about the cell type number, we can vary
-  the argument \Robject{n.celltypes} in the function 
-  \Rfunction{BUSseq\_MCMC}, e.g., from 2 to 10 and identify the 
-  underlying true cell type number K as the one that achieves the 
-  minimal BIC. \\
-  
-  \noindent The user can obtain the BIC value from the 
-  \Robject{BUSseqfits\_res} by the \Rfunction{BIC\_BUSseq}.\\
-  
-  <<bic>>=
-     BIC_val <- BIC_BUSseq(BUSseqfits_res)
-  @
-  
-      \noindent In this example, the underlying true number of cell 
-      types is four. For an illustration, we vary the 
-      \Robject{n.celltypes} from 3 to 6.
-   <<selection>>=
-   set.seed(123)
-   BIC_values <- rep(NA,4)
-   BUSseqfits_temp <- NULL
-   for(k in 3:6){
-    BUSseqfits_temp[[k-2]] <- BUSseq_MCMC(ObservedData = CountData, 
-                            n.celltypes = k, n.cores = 4, 
-                            n.iterations = 500, 
-                            working_dir = paste0("./K",k))
-    BIC_values[k-2] <- BIC_BUSseq(BUSseqfits_temp[[k-2]])
-   }
-   plot(3:6, BIC_values, xlab="cell type number", ylab="BIC", 
-        main="BIC plot", type="b")
-   @
-    
-    \noindent The BIC attains the minimum at \Robject{n.celltypes}=4, 
-    thus correctly recovering the true cell type number.
-  
-
   \bibliography{user_guide}
   \end{document}

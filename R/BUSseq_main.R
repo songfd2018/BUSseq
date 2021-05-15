@@ -30,8 +30,8 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
       if(is(ObservedData[[b]],"data.frame") | is(ObservedData[[b]],"matrix")){
         ObservedData[[b]] <- as.matrix(ObservedData[[b]])
       }else{
-        stop(paste0("Each element of ObservedData must be a",
-                    " \"matrix\" or \"data.frame\" object!\n"))
+        stop("Each element of ObservedData must be a",
+                    " \"matrix\" or \"data.frame\" object!\n")
       }
       Read <- cbind(Read,ObservedData[[b]])
       nb <- c(nb,ncol(ObservedData[[b]]))
@@ -39,7 +39,7 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
     ###################################
     ###Test the consistency of genes###
   }else{
-    stop(paste0("ObservedData must be a \"list\" object!\n"))
+    stop("ObservedData must be a \"list\" object!\n")
   }
   
   if(B < 2){
@@ -51,8 +51,8 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
   N <- sum(nb)
   
   if(sum(K > nb) > 0){
-    stop(paste0("The sample size in any batch must be greater",
-                " than the assumed cell type number.\n"))
+    stop("The sample size in any batch must be greater",
+                " than the assumed cell type number.\n")
   }
   
   ####Record the posterior sampling on the hard disk
@@ -60,6 +60,9 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
     dir.create(working_dir)
   }
   sampling_dir <- paste0(working_dir,"/MCMC_sampling_K",K)
+  if(dir.exists(sampling_dir)){
+    unlink(sampling_dir,recursive = TRUE)
+  }
   dir.create(sampling_dir, showWarnings=FALSE)
   
   #################
@@ -98,9 +101,9 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
   x_imputed <- matrix(mcmc_sample$x_imputed, G, N, byrow = TRUE)
   
   t.end <- Sys.time()
-  message(paste0("   The MCMC sampling takes: ", 
+  message("   The MCMC sampling takes: ", 
                  round(difftime(t.end, t.start,units="mins"), 3), 
-                 " mins", "\n"))
+                 " mins", "\n")
   
   #######################
   # Posterior inference #
@@ -165,9 +168,9 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
   BIC <- post_inference$BIC
   
   t.end<-Sys.time()
-  message(paste0("   calculating posterior means and posterior takes: ", 
+  message("   calculating posterior means and posterior takes: ", 
                  round(difftime(t.end, t.start,units="mins"), 3),
-                 " mins", "\n"))
+                 " mins", "\n")
   ###Generate the output "BUSseqfits" object
   #transfer Read, x.post, delta.est, w.est, delta.sd as a list
   Read_list <- list()
@@ -221,14 +224,14 @@ celltypes <- function(BUSseqfits_obj){
    
    for(b in seq_len(.B)){
       
-      message(paste0("Batch ", b, " cells' cell type indicators: ",
+      message("Batch ", b, " cells' cell type indicators: ",
             .w[[b]][1],",",.w[[b]][2],",",.w[[b]][3], 
-            "... ...\n"))
+            "... ...\n")
    }
-   message(paste0("The output format is a list with length",
-         " equal to the batch number.\n"))
-   message(paste0("Each element of the list is a cell type indicator",
-                " vector in that batch.\n"))
+   message("The output format is a list with length",
+         " equal to the batch number.\n")
+            message("Each element of the list is a cell type indicator",
+                " vector in that batch.\n")
    return(.w)
    }else{
    stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
@@ -240,8 +243,8 @@ dropout_coefficient_values <- function(BUSseqfits_obj){
    if(is(BUSseqfits_obj,"BUSseqfits")){
    .gamma<-BUSseqfits_obj$gamma.est
    message("The output format is a matrix.\n")
-   message(paste0("Each row represents a batch, the first column corresponds",
-                " to intercept and the second column is the odd ratio.\n"))
+   message("Each row represents a batch, the first column corresponds",
+                " to intercept and the second column is the odd ratio.\n")
    return(.gamma)
    }else{
    stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
@@ -264,8 +267,8 @@ celltype_effects <- function(BUSseqfits_obj){
    if(is(BUSseqfits_obj,"BUSseqfits")){
    .beta<-BUSseqfits_obj$beta.est
    message("The output format is a matrix.\n")
-   message(paste0("Each row represents a gene, and each column corresponds",
-                " to a cell type.\n"))
+   message("Each row represents a gene, and each column corresponds",
+                " to a cell type.\n")
    return(.beta)
    }else{
    stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
@@ -281,8 +284,8 @@ celltype_mean_expression <- function(BUSseqfits_obj){
    mu <- exp(.alpha+.beta)
    
    message("The output format is a matrix.\n")
-   message(paste0("Each row represents a gene, and each column corresponds",
-                " to a cell type.\n"))
+   message("Each row represents a gene, and each column corresponds",
+                " to a cell type.\n")
    return(mu)
    }else{
    stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
@@ -295,8 +298,8 @@ location_batch_effects <- function(BUSseqfits_obj){
    if(is(BUSseqfits_obj,"BUSseqfits")){
    .nu<-BUSseqfits_obj$nu.est
    message("The output format is a matrix.\n")
-   message(paste0("Each row represents a gene, and each column",
-         " corresponds to a batch.\n"))
+   message("Each row represents a gene, and each column",
+         " corresponds to a batch.\n")
    return(.nu)
    }else{
    stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
@@ -309,8 +312,8 @@ overdispersions <- function(BUSseqfits_obj){
    if(is(BUSseqfits_obj,"BUSseqfits")){
    .phi<-BUSseqfits_obj$phi.est
    message("The output format is a matrix.\n")
-   message(paste0("Each row represents a gene, and each column",
-         " corresponds to a batch.\n"))
+   message("Each row represents a gene, and each column",
+         " corresponds to a batch.\n")
    return(.phi)
    }else{
    stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
@@ -322,10 +325,10 @@ cell_effect_values <- function(BUSseqfits_obj){
    
    if(is(BUSseqfits_obj,"BUSseqfits")){
    .delta<-BUSseqfits_obj$delta.est
-   message(paste0("The output format is a list with length equal to",
-         " the batch number.\n"))
-   message(paste0("Each element of the list is a cell-specific",
-                " size factor vector of that batch.\n"))
+   message("The output format is a list with length equal to",
+         " the batch number.\n")
+   message("Each element of the list is a cell-specific",
+                " size factor vector of that batch.\n")
    return(.delta)
    }else{
    stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
@@ -364,8 +367,8 @@ raw_read_counts<- function(BUSseqfits_obj){
    
    class(Read_raw) <- "CountData"
    
-   message(paste0("The output format is a \"CountData\" object with length",
-         " equal to the batch number.\n"))
+   message("The output format is a \"CountData\" object with length",
+         " equal to the batch number.\n")
    message("Each element of the object is the raw read count matrix.\n")
    message("In each matrix, each row represents a gene and each column",
          " correspods to a cell.\n")
@@ -385,11 +388,11 @@ imputed_read_counts<- function(BUSseqfits_obj){
    
    class(Read_imputed) <- "CountData"
    
-   message(paste0("The output format is a \"CountData\" object with length",
-         " equal to the batch number.\n"))
+   message("The output format is a \"CountData\" object with length",
+         " equal to the batch number.\n")
    message("Each element of the object is the imputed read count matrix.\n")
-   message(paste0("In each matrix, each row represents a gene and each column",
-         " correspods to a cell.\n"))
+   message("In each matrix, each row represents a gene and each column",
+         " correspods to a cell.\n")
    
    return(Read_imputed)
    
@@ -446,11 +449,11 @@ corrected_read_counts<- function(BUSseqfits_obj){
       cell_index <- cell_index + .nb[b]
    }
    class(Read_corrected) <- "CountData"
-   message(paste0("The output format is a \"CountData\" object with length",
-         " equal to the batch number.\n"))
+   message("The output format is a \"CountData\" object with length",
+         " equal to the batch number.\n")
    message("Each element of the object is the corrected read count matrix.\n")
-   message(paste0("In each matrix, each row represents a gene and",
-         " each column correspods to a cell.\n"))
+   message("In each matrix, each row represents a gene and",
+         " each column correspods to a cell.\n")
    return(Read_corrected)
    }else{
    stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
@@ -472,25 +475,25 @@ print.BUSseqfits <- function(x, ...){
    .nb <- BUSseqfits$n.perbatch
    for(b in seq_len(.B)){
    
-   message(paste0("Batch ", b, " cells' cell type indicators: ",
+   message("Batch ", b, " cells' cell type indicators: ",
                 .w[[b]][1],",",.w[[b]][2],",",.w[[b]][3], 
-                "... ...\n"))
+                "... ...\n")
    }
    message("\n")
    
    message("The estimated location batch effects:\n")
    .nu <- BUSseqfits$nu.est
    for(b in seq_len(.B)){
-   message(paste0("    Batch ", b, " location batch effects are: ",
-         .nu[1,b],",",.nu[2,b],",",.nu[3,b], "... ...\n"))
+   message("    Batch ", b, " location batch effects are: ",
+         .nu[1,b],",",.nu[2,b],",",.nu[3,b], "... ...\n")
    }
    message("\n")
    
    message("The estimated overdispersions:\n")
    .phi <- BUSseqfits$phi.est
    for(b in seq_len(.B)){
-   message(paste0("    Batch ", b, " scale batch effects are: ",
-         .phi[1,b],",",.phi[2,b],",",.phi[3,b], "... ...\n"))
+   message("    Batch ", b, " scale batch effects are: ",
+         .phi[1,b],",",.phi[2,b],",",.phi[3,b], "... ...\n")
    }
    message("\n")
 }
@@ -511,28 +514,28 @@ summary.BUSseqfits <- function(object, ...){
    message(c("N=", .N, " cells in total\n"))
    message(c("Run ", num_iters," iterations with the first ",num_burnin,
              " iterations as burnin in the MCMC algorithm.\n\n"))
-   message(paste0("BUSseqfits is an R list that contains",
-             " the following main elements:\n\n"))
-   message(paste0("    BUSseqfits$w.est : the estimated cell type indicators,",
-          " a list with length equal to B.\n"))
-   message(paste0("    BUSseqfits$pi.est : the estimated cell type proportions",
-             " across batches, a K by B matrix.\n"))
-   message(paste0("    BUSseqfits$gamma.est : the estimated the coefficients",
+   message("BUSseqfits is an R list that contains",
+             " the following main elements:\n\n")
+   message("    BUSseqfits$w.est : the estimated cell type indicators,",
+          " a list with length equal to B.\n")
+   message("    BUSseqfits$pi.est : the estimated cell type proportions",
+             " across batches, a K by B matrix.\n")
+   message("    BUSseqfits$gamma.est : the estimated the coefficients",
              " of the logistic regression for the dropout events,",
-             " a B by 2 matrix\n"))
-   message(paste0("    BUSseqfits$alpha.est : the estimated log-scale baseline",
-             " expression levels, a vector with length G.\n"))
-   message(paste0("    BUSseqfits$beta.est : the estimated cell type effects,",
-          " a G by K matrix.\n"))
-   message(paste0("    BUSseqfits$delta.est : the estimated cell-specific",
-             " effects, a list with length equal to B.\n"))
-   message(paste0("    BUSseqfits$nu.est : the estimated location batch",
-                  " effects, a G by B matrix.\n"))
-   message(paste0("    BUSseqfits$phi.est : the estimated overdispersion",
-             " parameters, a G by B matrix.\n"))
+             " a B by 2 matrix\n")
+   message("    BUSseqfits$alpha.est : the estimated log-scale baseline",
+             " expression levels, a vector with length G.\n")
+   message("    BUSseqfits$beta.est : the estimated cell type effects,",
+          " a G by K matrix.\n")
+   message("    BUSseqfits$delta.est : the estimated cell-specific",
+             " effects, a list with length equal to B.\n")
+   message("    BUSseqfits$nu.est : the estimated location batch",
+                  " effects, a G by B matrix.\n")
+   message("    BUSseqfits$phi.est : the estimated overdispersion",
+             " parameters, a G by B matrix.\n")
    message("    BUSseqfits$BIC : the BIC, a scalar.\n")
-   message(paste0("    BUSseqfits$D.est : the intrinsic gene indicators,",
-             " a vector with length N.\n"))
+   message("    BUSseqfits$D.est : the intrinsic gene indicators,",
+             " a vector with length N.\n")
    message("    For more output values, please use \"?BUSseq_MCMC\"\n")
    message("\n")
 }
@@ -544,17 +547,17 @@ print.CountData <- function(x, ...){
    .B <- length(CountData)
    .G <- nrow(CountData[[1]])
    
-   message(paste0("There are ", .B, " batches and ", .G, " genes.\n"))
+   message("There are ", .B, " batches and ", .G, " genes.\n")
    for(b in seq_len(.B)){
    .nperbatch <- ncol(CountData[[b]])
-   message(paste0("Batch ", b, " contains ", .nperbatch, 
-                " cells, and their read counts in all genes are: \n"))
-   message(paste0("Gene 1: ", CountData[[b]][1,1],", ", CountData[[b]][1,2],
-                ", ", CountData[[b]][1,3], ", ... ...\n"))
-   message(paste0("Gene 2: ", CountData[[b]][2,1],", ", CountData[[b]][2,2],
-                ", ", CountData[[b]][2,3], ", ... ...\n"))
-   message(paste0("Gene 3: ", CountData[[b]][3,1],", ", CountData[[b]][3,2],
-                ", ", CountData[[b]][3,3], ", ... ...\n"))
+   message("Batch ", b, " contains ", .nperbatch, 
+                " cells, and their read counts in all genes are: \n")
+   message("Gene 1: ", CountData[[b]][1,1],", ", CountData[[b]][1,2],
+                ", ", CountData[[b]][1,3], ", ... ...\n")
+   message("Gene 2: ", CountData[[b]][2,1],", ", CountData[[b]][2,2],
+                ", ", CountData[[b]][2,3], ", ... ...\n")
+   message("Gene 3: ", CountData[[b]][3,1],", ", CountData[[b]][3,2],
+                ", ", CountData[[b]][3,3], ", ... ...\n")
    message("    ... ...\n\n")
    }
    message("\n")
@@ -569,10 +572,10 @@ summary.CountData <- function(object, ...){
    .B <- length(CountData)
    .G <- nrow(CountData[[1]])
    
-   message(paste0("There are ", .B, " batches and ", .G, " genes.\n"))
+   message("There are ", .B, " batches and ", .G, " genes.\n")
    for(b in seq_len(.B)){
    .nperbatch <- ncol(CountData[[b]])
-   message(paste0("Batch ", b, " contains ", .nperbatch, " cells."))
+   message("Batch ", b, " contains ", .nperbatch, " cells.")
    }
    message("\n")
 }

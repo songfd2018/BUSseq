@@ -37,10 +37,10 @@ Nature communications 11, no. 1 (2020): 1-15.
 #######################################
 # Apply BUSseq to the Simulation Data #
 #######################################
-ObservedCounts <- BUSseqfits_example$CountData_raw
-BUSseqfits_res <- BUSseq_MCMC(ObservedCounts, n.celltypes = 4, 
-seed = 123, n.iterations = 1000)
-BUSseqfits_res <- BUSseqfits_example
+y <- BUSseqfits_example$CountData_raw
+BUSseqfits_res <- BUSseq_MCMC(ObservedData = y, 
+                        seed = 1234, n.cores = 2,
+                        n.celltypes = 4, n.iterations = 500)
 
 ################################################
 # Extract Estimates from the BUSseqfits Object #
@@ -48,7 +48,6 @@ BUSseqfits_res <- BUSseqfits_example
 
 #return cell type indicators
 w.est <- celltypes(BUSseqfits_res)
-table(w.est)
 
 #return the intercept and odds ratio of the logistic regression
 #for dropout events
