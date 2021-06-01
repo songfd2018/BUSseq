@@ -45,3 +45,15 @@ Change in version 0.99.13 (2020-05-15)
 
 Change in version 0.99.14 (2020-06-01)
 + Modifying the output of BUSseq_MCMC as a SingleCellExperiment object and allowing the input as that object as well 
+
+Change in version 0.99.15 (2020-06-01)
++ Removing the redundant print and summary function
+
+Change in version 0.99.16 (2020-06-01)
++ Avoiding the overlapping when loading dependencies
+
+Change in version 0.99.17 (2020-06-01)
++ Correcting the import of dependencies
+
+Change in version 0.99.18 (2020-06-01)
++ Importing "assay<-" in the NAMESPACE

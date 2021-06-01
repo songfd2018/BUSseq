@@ -41,7 +41,7 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
      G <- nrow(Read)
      N <- sum(nb)
      
-     res <- SingleCellExperiment(assays = list(counts = RawCountData),
+     res <- SingleCellExperiment(assays = list(counts = Read),
             colData = DataFrame(Batch_ind = factor(rep(batch_name_vec,nb))))
      ###################################
      ###Test the consistency of genes###
