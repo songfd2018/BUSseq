@@ -2,7 +2,7 @@
 \alias{heatmap_data_BUSseq}
 \title{
   Draw the Heatmap of the Log-scale Read Count Data for 
-  a \code{CountData} Object
+  the Output of the \code{BUSseq_MCMC} Function
 }
 \description{
   Plot the heatmap of the log-scale read count data across multiple
@@ -10,26 +10,30 @@
   as "png" format. 
 }
 \usage{
-heatmap_data_BUSseq(CountData_obj, gene_set = NULL,
-                    project_name="BUSseq_heatmap", 
+heatmap_data_BUSseq(sce_BUSseqfit, 
+                    data_type = c("Raw","Imputed","Corrected"), 
+                    gene_set = NULL,
+                    project_name= paste0("BUSseq_heatmap_",data_type), 
                     image_dir = NULL, color_key_seq = NULL, 
                     image_width = 1440, image_height = 1080)
 }
 \arguments{
-  \item{CountData_obj}{
-    A \code{CountData} object obtained from the function 
-    \code{raw_read_counts}, \code{imputed_read_counts} or 
-    \code{corrected_read_counts}.
+  \item{sce_BUSseqfit}{An output \code{SingleCellExperiment} object obtained 
+  from the function \code{BUSseq_MCMC}.}
+  \item{data_type}{
+    A string to determine which count data matrix is used to draw the heatmap,
+    "Raw" for the raw count data, "Imputed" for the imputed data, and 
+    "Corrected" for the corrected data.
   }
   \item{gene_set}{
     A vector of gene indices indicating the gene set of interest to
     display in the heatmap. The default is all genes. 
-    We also recommend displaying the intrinsic genes only by setting
-    this argument as \code{intrisic_genes_BUSseq(BUSseqfits_obj)}.
+    We also recommend displaying the intrinsic genes obtained from 
+    \code{intrisic_genes_BUSseq(BUSseqfits_obj)}.
   }
   \item{project_name}{
     A string to name the "png" image. By default, the figure is named 
-    as "BUSseq_heatmap_log1p_data.png."
+    as "BUSseq_heatmap_Raw_log1p_data.png."
   }
   \item{image_dir}{
     A directory to store the gnereated heatmap. The default is to 
@@ -70,9 +74,8 @@ Nature communications 11, no. 1 (2020): 1-15.
   Fangda Song
 }
 \examples{
-  # Disply the read count data for a sample BUSseqfits object
-  Example_CountData_raw <- raw_read_counts(BUSseqfits_example)
-  class(Example_CountData_raw)
-  # Plot the first 100 genes in the heatmap
-  heatmap_data_BUSseq(Example_CountData_raw, gene_set = 1:100)
+  library(SingleCellExperiment)
+  # Plot the imputed read count data of the first 100 genes
+  heatmap_data_BUSseq(BUSseqfits_example, data_type = "Imputed",
+                      gene_set = 1:100)
 }

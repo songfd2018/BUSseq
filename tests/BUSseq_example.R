@@ -1,11 +1,15 @@
 #######################################
-# Apply BUSseq to the simulation data #
+# Apply BUSseq to the Simulation Data #
 #######################################
 library(BUSseq)
-ObservedCounts <- BUSseqfits_example$CountData_raw
-BUSseqfits_res <- BUSseq_MCMC(ObservedCounts, n.celltypes = 4, 
-                              seed = 1234, n.iterations = 500)
-BUSseqfits_res <- BUSseqfits_example
+library(SingleCellExperiment)
+RawCountData <- assay(BUSseqfits_example, "counts")
+batch_ind <- unlist(colData(BUSseqfits_example))
+sce <- SingleCellExperiment(assays = list(counts = RawCountData),
+                            colData = DataFrame(Batch_ind = batch_ind))
+BUSseqfits_res <- BUSseq_MCMC(ObservedData = sce, 
+                              seed = 1234, n.cores = 2,
+                              n.celltypes = 4, n.iterations = 500)
 
 ################################################
 # Extract Estimates from the BUSseqfits Object #
@@ -13,7 +17,6 @@ BUSseqfits_res <- BUSseqfits_example
 
 #return cell type indicators
 w.est <- celltypes(BUSseqfits_res)
-table(w.est)
 
 #return the intercept and odds ratio of the logistic regression
 #for dropout events
@@ -50,13 +53,18 @@ CountData_raw <- raw_read_counts(BUSseqfits_res)
 CountData_imputed <- imputed_read_counts(BUSseqfits_res)
 
 #return the corrected read count matrix
-CountData_corrected <- corrected_read_counts(BUSseqfits_res)
+BUSseqfits_res <- corrected_read_counts(BUSseqfits_res)
 
 #################
 # Visualization #
 #################
 #generate the heatmap of raw read count data
-heatmap_data_BUSseq(CountData_raw, project_name="Heatmap_raw")
+heatmap_data_BUSseq(BUSseqfits_res, project_name="Heatmap_raw")
+
+#generate the heatmap of imputed read count data
+heatmap_data_BUSseq(BUSseqfits_res, data_type = "Imputed",
+                    project_name="Heatmap_imputed")
 
 #generate the heatmap of corrected read count data
-heatmap_data_BUSseq(CountData_corrected, project_name="Heatmap_corrected")
+heatmap_data_BUSseq(BUSseqfits_res, data_type = "Corrected", 
+                    project_name="Heatmap_corrected")

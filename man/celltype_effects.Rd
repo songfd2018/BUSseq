@@ -1,17 +1,17 @@
 \name{celltype_effects}
 \alias{celltype_effects}
 \title{
-Obtain the Cell-type Effects from a \code{BUSseqfits} Object
+Obtain the Cell-type Effects from the Output of the \code{BUSseq_MCMC} Function
 }
 \description{
-The function gives the estimated cell-type effects of a 
-\code{BUSseqfits} object, the output of \code{BUSseq_MCMC}.
+The function gives the estimated cell-type effects in the output 
+\code{SingleCellExperiment} object.
 }
 \usage{
-celltype_effects(BUSseqfits_obj)
+celltype_effects(sce_BUSseqfit)
 }
 \arguments{
-  \item{BUSseqfits_obj}{A \code{BUSseqfits} object obtained from 
+  \item{sce_BUSseqfit}{An output \code{SingleCellExperiment} object by 
   the function \code{BUSseq_MCMC}.}
 }
 \value{
@@ -31,7 +31,7 @@ Fangda Song
 }
 
 \examples{
-#"BUSseqfits_example" is a sample BUSseqfits object
-class(BUSseqfits_example)
+# "BUSseqfits_example" is an example output
+BUSseqfits_example
 beta.est <- celltype_effects(BUSseqfits_example)
 }

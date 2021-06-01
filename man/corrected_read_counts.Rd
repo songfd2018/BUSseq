@@ -2,8 +2,8 @@
 \alias{corrected_read_counts}
 %- Also NEED an '\alias' for EACH other topic documented here.
 \title{
-  Obtain the Corrected Read Count Matrices from 
-  a \code{BUSseqfits} Object
+  Generate the Corrected Read Count Matrix within the Output of 
+  the \code{BUSseq_MCMC}
 }
 \description{
   The function generates a version of count data, for which the batch
@@ -15,18 +15,16 @@
   measured in a single batch.
 }
 \usage{
-  corrected_read_counts(BUSseqfits_obj)
+  corrected_read_counts(sce_BUSseqfit)
 }
 \arguments{
-  \item{BUSseqfits_obj}{A \code{BUSseqfits} object output by 
-  the function \code{BUSseq_MCMC}.}
+  \item{sce_BUSseqfit}{An output \code{SingleCellExperiment} object obtained 
+  from the function \code{BUSseq_MCMC}.}
 }
 \value{
-  \item{CountData_corrected}{The corrected read counts, 
-  a \code{CountData} with length equal to the batch number. 
-  Each element is a read count matrix for a specific batch, 
-  where each row corresponds to a gene and each column 
-  represents a cell.}
+  \item{corrected_data}{The corrected read count matrix, which is added to 
+  the assays of \code{sce_BUSseqfit} and can be loaded 
+  by \code{assay(sce_BUSseqfit, "corrected_data")}.}
 }
 \references{
 Song, Fangda, Ga Ming Angus Chan, and Yingying Wei. 
@@ -38,8 +36,9 @@ Nature communications 11, no. 1 (2020): 1-15.
   Fangda Song
 }
 \examples{
-  #"BUSseqfits_example" is a sample BUSseqfits object
-  class(BUSseqfits_example)
-  Example_CountData_corrected <- corrected_read_counts(BUSseqfits_example)
-  class(Example_CountData_corrected)
+# "BUSseqfits_example" is an example output
+library(SingleCellExperiment)
+BUSseqfits_example
+BUSseqfits_corrected <- corrected_read_counts(BUSseqfits_example)
+corrected_data <- assay(BUSseqfits_corrected, "corrected_data")
 }

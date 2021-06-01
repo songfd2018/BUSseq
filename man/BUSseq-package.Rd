@@ -37,10 +37,14 @@ Nature communications 11, no. 1 (2020): 1-15.
 #######################################
 # Apply BUSseq to the Simulation Data #
 #######################################
-y <- BUSseqfits_example$CountData_raw
-BUSseqfits_res <- BUSseq_MCMC(ObservedData = y, 
-                        seed = 1234, n.cores = 2,
-                        n.celltypes = 4, n.iterations = 500)
+library(SingleCellExperiment)
+RawCountData <- assay(BUSseqfits_example, "counts")
+batch_ind <- colData(BUSseqfits_example)
+sce <- SingleCellExperiment(assays = list(counts = RawCountData),
+                            colData = DataFrame(Batch_ind = batch_ind))
+BUSseqfits_res <- BUSseq_MCMC(ObservedData = sce, 
+                              seed = 1234, n.cores = 2,
+                              n.celltypes = 4, n.iterations = 500)
 
 ################################################
 # Extract Estimates from the BUSseqfits Object #
@@ -90,13 +94,14 @@ CountData_corrected <- corrected_read_counts(BUSseqfits_res)
 # Visualization #
 #################
 #generate the heatmap of raw read count data
-heatmap_data_BUSseq(CountData_raw, project_name="Heatmap_raw")
+heatmap_data_BUSseq(BUSseqfits_res, project_name="Heatmap_raw")
 
 #generate the heatmap of imputed read count data
-heatmap_data_BUSseq(CountData_imputed, project_name="Heatmap_imputed")
+heatmap_data_BUSseq(BUSseqfits_res, data_type = "Imputed",
+                    project_name="Heatmap_imputed")
 
 #generate the heatmap of corrected read count data
-heatmap_data_BUSseq(CountData_corrected, 
-project_name="Heatmap_corrected")
+heatmap_data_BUSseq(BUSseqfits_res, data_type = "Corrected", 
+                    project_name="Heatmap_corrected")
 }
 }

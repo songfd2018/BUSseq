@@ -1,18 +1,19 @@
 \name{baseline_expression_values}
 \alias{baseline_expression_values}
 \title{
-Obtain the Log-Scale Baseline Expression levels from a \code{BUSseqfits} Object
+Obtain the Log-Scale Baseline Expression Levels from the Output of the 
+\code{BUSseq_MCMC} Function
 }
 \description{
-The function gives the estimated log-scale baseline expression levels from a
-\code{BUSseqfits} object, the output of \code{BUSseq_MCMC}.
+The function gives the estimated log-scale baseline expression levels from the 
+output \code{SingleCellExperiment} object.
 }
 \usage{
-baseline_expression_values(BUSseqfits_obj)
+baseline_expression_values(sce_BUSseqfit)
 }
 \arguments{
-  \item{BUSseqfits_obj}{A BUSseqfits object obtained from the function 
-  \code{BUSseq_MCMC}.}
+  \item{sce_BUSseqfit}{An output \code{SingleCellExperiment} object by 
+  the function \code{BUSseq_MCMC}.}
 }
 \value{
 \item{alpha.est}{The estimated log-scale baseline expression levels, a 
@@ -29,7 +30,7 @@ Nature communications 11, no. 1 (2020): 1-15.
 Fangda Song
 }
 \examples{
-#"BUSseqfits_example" is a sample BUSseqfits object
-class(BUSseqfits_example)
+# "BUSseqfits_example" is an example output
+BUSseqfits_example
 alpha.est <- baseline_expression_values(BUSseqfits_example)
 }

@@ -1,22 +1,23 @@
 \name{overdispersions}
 \alias{overdispersions}
 \title{
-Obtain the Overdispersion Parameters from a \code{BUSseqfits} Object
+Obtain the Overdispersion Parameters from the Output of 
+the \code{BUSseq_MCMC} Function
 }
 \description{
-The function gives the estimated overdispersion parameters of a
-\code{BUSseqfits} object, the output of \code{BUSseq_MCMC}.
+The function gives the estimated overdispersion parameters in the output 
+\code{SingleCellExperiment} object.
 }
 \usage{
-overdispersions(BUSseqfits_obj)
+overdispersions(sce_BUSseqfit)
 }
 \arguments{
-  \item{BUSseqfits_obj}{ A \code{BUSseqfits} object obtained from the 
-  function \code{BUSseq_MCMC}.}
+  \item{sce_BUSseqfit}{An output \code{SingleCellExperiment} object obtained 
+  from the function \code{BUSseq_MCMC}.}
 }
 \value{
-\item{phi.est}{The estimated overdispersion parameters, a B by G matrix,
-where phi_{bg} is the overdispersion parameter of gene g in batch b.}
+\item{phi.est}{The estimated overdispersion parameters, a G by B matrix,
+where [g,b] element is the overdispersion parameter of gene g in batch b.}
 }
 \references{
 Song, Fangda, Ga Ming Angus Chan, and Yingying Wei. 
@@ -28,7 +29,7 @@ Nature communications 11, no. 1 (2020): 1-15.
 Fangda Song
 }
 \examples{
-#"BUSseqfits_example" is a sample BUSseqfits object
-class(BUSseqfits_example)
+# "BUSseqfits_example" is an example output
+BUSseqfits_example
 phi.est <- overdispersions(BUSseqfits_example)
 }

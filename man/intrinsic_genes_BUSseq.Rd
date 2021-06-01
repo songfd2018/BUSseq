@@ -1,21 +1,23 @@
 \name{intrinsic_genes_BUSseq}
 \alias{intrinsic_genes_BUSseq}
 \title{
-Obtain the Intrinsic Gene Indices from a \code{BUSseqfits} Object
+Obtain the Intrinsic Gene Indicators from the Output of 
+the \code{BUSseq_MCMC} Function
 }
 \description{
-The function gives the estimated intrinsic gene indices of a 
-\code{BUSseqfits} object, the output of \code{BUSseq_MCMC}.
+The function gives the estimated intrinsic gene indicators in the output 
+\code{SingleCellExperiment} object.
 }
 \usage{
-intrinsic_genes_BUSseq(BUSseqfits_obj)
+intrinsic_genes_BUSseq(sce_BUSseqfit)
 }
 \arguments{
-  \item{BUSseqfits_obj}{ A \code{BUSseqfits} object obtained from 
-  the function \code{BUSseq_MCMC}.}
+  \item{sce_BUSseqfit}{An output \code{SingleCellExperiment} object obtained 
+  from the function \code{BUSseq_MCMC}.}
 }
 \value{
-\item{intrinsic_genes}{The intrinsic gene indices. The return is a vector.}
+\item{intrinsic_genes}{A vector indicating whether a gene is 
+intrinsic or not.}
 }
 \references{
 Song, Fangda, Ga Ming Angus Chan, and Yingying Wei. 
@@ -27,7 +29,7 @@ Nature communications 11, no. 1 (2020): 1-15.
 Fangda Song
 }
 \examples{
-#"BUSseqfits_example" is a sample BUSseqfits object
-class(BUSseqfits_example)
-D.est <- intrinsic_genes_BUSseq(BUSseqfits_example)
+# "BUSseqfits_example" is an example output
+BUSseqfits_example
+intri_genes <- intrinsic_genes_BUSseq(BUSseqfits_example)
 }

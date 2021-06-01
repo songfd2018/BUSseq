@@ -1,19 +1,18 @@
 \name{celltype_mean_expression}
 \alias{celltype_mean_expression}
 \title{
-  Obtain the Cell-Type-Specific Mean Expression Levels from a 
-  \code{BUSseqfits} Object
+  Obtain the Cell-Type-Specific Mean Expression Levels from the Output of 
+  the \code{BUSseq_MCMC} Function
 }
 \description{
   The function gives the estimated cell-type-specific mean expression
-  levels of a \code{BUSseqfits} object, the output of 
-  \code{BUSseq_MCMC}.
+  levels in the output \code{SingleCellExperiment} object.
 }
 \usage{
-  celltype_mean_expression(BUSseqfits_obj)
+  celltype_mean_expression(sce_BUSseqfit)
 }
 \arguments{
-  \item{BUSseqfits_obj}{A \code{BUSseqfits} object obtained from 
+  \item{sce_BUSseqfit}{An output \code{SingleCellExperiment} object by 
   the function \code{BUSseq_MCMC}.}
 }
 \value{
@@ -31,7 +30,7 @@ Nature communications 11, no. 1 (2020): 1-15.
   Fangda Song
 }
 \examples{
-  #"BUSseqfits_example" is a sample BUSseqfits object
-  class(BUSseqfits_example)
-  mu.est <- celltype_mean_expression(BUSseqfits_example)
+# "BUSseqfits_example" is an example output
+BUSseqfits_example
+mu.est <- celltype_mean_expression(BUSseqfits_example)
 }

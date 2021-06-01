@@ -11,10 +11,10 @@ hierarchical model that closely follows the data-generating mechanism
 of scRNA-seq experiments. BUSseq can simultaneously correct batch
 effects, cluster cell types, impute missing data caused by dropout
 events and detect differentially expressed genes without requiring a
-preliminary normalization step. We adopt MCMC algorithm to conduct
-posterior inference for the BUSseq model. Here, we denote the batch 
-number as B, the gene number as G and the user-specific cell-type 
-number as K.
+preliminary normalization step. We adopt the MCMC algorithm to conduct
+posterior inference for the BUSseq model. Here, we denote 
+the total number of cells as N, the batch number as B, the gene number as G,
+and the cell-type number as K.
 }
 \usage{
 BUSseq_MCMC(ObservedData, n.celltypes, seed = round(runif(1,1,10000)), 
@@ -31,10 +31,15 @@ BUSseq_MCMC(ObservedData, n.celltypes, seed = round(runif(1,1,10000)),
 }
 \arguments{
   \item{ObservedData}{
-  \code{ObservedData} is an R list with the length equal to the batch 
-  number. The \code{b}-th element of \code{ObservedData} is the read 
-  count matrix of batch \code{b}, where each row corresponds to a gene,
-  and each column corresponds to a cell.
+  \code{ObservedData} is a list with the length equal to the batch 
+  number, or a \code{SingleCellExperiment} object. If it is a list, the 
+  \code{b}-th element of \code{ObservedData} should be the raw 
+  count data matrix of batch \code{b}, where each row corresponds to a gene,
+  and each column corresponds to a cell. If it is a \code{SingleCellExperiment} 
+  object, the raw count data matrix should have a count matrix in \code{counts},
+  and \code{Batch_ind} exists in the \code{colData} to indicate the 
+  corresponding batch of each cell. Moreover, cells from the same batch should 
+  be arranged together.   
 }
   \item{n.celltypes}{
   \code{n.celltypes} is an integer and represents the number of 
@@ -83,7 +88,7 @@ BUSseq_MCMC(ObservedData, n.celltypes, seed = round(runif(1,1,10000)),
   \item{hyper_gamma0}{
   \code{hyper_gamma0} is a scalar representing the variance of the
   normal prior for the intercept of the logistic regression for dropout
-  events. The default is \code{3}
+  events. The default is \code{3}.
 }
   \item{hyper_gamma1}{
   \code{hyper_gamma1} is a vector representing the hyperparameter of
@@ -127,7 +132,16 @@ BUSseq_MCMC(ObservedData, n.celltypes, seed = round(runif(1,1,10000)),
 }
 \value{
 
-List with the following elements:
+A \code{SingleCellExperiment} object \code{res} is outputed with an imputed 
+count data matrix \code{assay(res, "imputed_data")} after imputing dropout 
+events. At the same time, the estimated cell type labels and relative size 
+factors of cells are added in the column-level metadata 
+\code{int_colData(res)$BUSseq}, while the identified 
+intrinsic genes are stored in the row-level metadata 
+\code{int_elementMetadata(res)$BUSseq}.
+
+Morover, the dimension information, the posterior inference of parameters 
+and latent variables are stored as a list in \code{metadata(res)$BUSseq}:
 \item{n.cell}{The total number of cells in all batches, a scalar.}
 \item{n.gene}{The number of genes, a scalar.}
 \item{n.batch}{The number of batches, a scalar.}
@@ -139,16 +153,8 @@ a scalar.}
 algorithm, a scalar.}
 \item{seed}{The seed for the MCMC algorithm.}
 \item{n.burnin}{The number of iterations as burnin, a scalar.}
-\item{CountData_raw}{The observed raw read count data. The return is a 
-list with length equal to the batch number B. Each element is a read 
-count matrix where each row represents a gene and each column 
-represents a cell.}
-\item{CountData_imputed}{The imputed true read count data. The return 
-is a list with length equal to the batch number B. Each element is a 
-read count matrix where each row represents a gene and each column 
-represents a cell.}
 \item{gamma.est}{The estimated intercept and odds ratio of the logistic
-regression for dropout events, a B-by-2 matrix.}
+regression for dropout events, a B by 2 matrix.}
 \item{alpha.est}{The estimated log-scale baseline expression levels, 
 a G-dimensional vector whose g-th element is the estimated log-scale 
 mean gene expression level of gene g in the first cell type.}
@@ -156,25 +162,22 @@ mean gene expression level of gene g in the first cell type.}
 whose [g,k] element is the effects of cell type k on gene g compared 
 with the first cell type. Note that the first column is zero as 
 the first cell type is taken as the baseline cell type.}
-\item{nu.est}{The estimated location batch effects, a B by G matrix, 
-where [b,g] element is the location batch effect on gene g 
+\item{nu.est}{The estimated location batch effects, a G by B matrix, 
+where [g,b] element is the location batch effect on gene g 
 in the batch b compared with the first batch. Note that the first 
 column is zero as the first batch is taken as the reference batch 
 without batch effects.}
-\item{delta.est}{The estimated cell-specific global effects, a list 
-with length equal to the batch number B, whose b-th element is a vector
-of cell-specific effect in batch b. Note that the first element in each
-vector is zero as the first cell in each batch is taken as the 
-reference cell.}
+\item{delta.est}{The estimated cell-specific global effects, an N-dimensional 
+vector. Note that the first element in each vector is zero as the first cell 
+in each batch is taken as the reference cell.}
 \item{phi.est}{The estimated overdispersion parameters, 
-a B by G matrix, where phi_{bg} is the overdispersion parameter 
+a G by B matrix, where [g,b] element is the overdispersion parameter 
 on gene g in batch b.}
 \item{pi.est}{The estimated cell-type proportions across batches, 
-a K by B matrix, whose [k,b] element is the estimated proportion of 
+a B by K matrix, whose [b,k] element is the estimated proportion of 
 cell type k in batch b.}
 \item{w.est}{The estimated cell-type indicators of each cell, 
-a list with length equal to the batch number B whose b-th element is 
-the estimated cell type in the b-th batch.}
+a N-dimensional vector.}
 \item{p.est}{The estimated proportion of differentially expressed genes
 compared with the first cell type, a scalar.}
 \item{PPI.est}{The estimated posterior marginal probability of being 
@@ -202,10 +205,14 @@ Fangda Song
 #######################################
 # Apply BUSseq to the Simulation Data #
 #######################################
-y <- BUSseqfits_example$CountData_raw
-BUSseqfits_res <- BUSseq_MCMC(ObservedData = y, 
-                        seed = 1234, n.cores = 2,
-                        n.celltypes = 4, n.iterations = 500)
+library(SingleCellExperiment)
+RawCountData <- assay(BUSseqfits_example, "counts")
+batch_ind <- colData(BUSseqfits_example)
+sce <- SingleCellExperiment(assays = list(counts = RawCountData),
+                            colData = DataFrame(Batch_ind = batch_ind))
+BUSseqfits_res <- BUSseq_MCMC(ObservedData = sce, 
+                              seed = 1234, n.cores = 2,
+                              n.celltypes = 4, n.iterations = 500)
 
 ################################################
 # Extract Estimates from the BUSseqfits Object #
@@ -255,14 +262,14 @@ CountData_corrected <- corrected_read_counts(BUSseqfits_res)
 # Visualization #
 #################
 #generate the heatmap of raw read count data
-heatmap_data_BUSseq(CountData_raw, project_name="Heatmap_raw")
+heatmap_data_BUSseq(BUSseqfits_res, project_name="Heatmap_raw")
 
 #generate the heatmap of imputed read count data
-heatmap_data_BUSseq(CountData_imputed, project_name="Heatmap_imputed")
+heatmap_data_BUSseq(BUSseqfits_res, data_type = "Imputed",
+                    project_name="Heatmap_imputed")
 
 #generate the heatmap of corrected read count data
-heatmap_data_BUSseq(CountData_corrected, 
-project_name="Heatmap_corrected")
-
+heatmap_data_BUSseq(BUSseqfits_res, data_type = "Corrected", 
+                    project_name="Heatmap_corrected")
 }
 }

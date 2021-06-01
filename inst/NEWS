@@ -42,3 +42,6 @@ Change in version 0.99.12 (2020-05-15)
 
 Change in version 0.99.13 (2020-05-15)
 + Modifying the running example 
+
+Change in version 0.99.14 (2020-06-01)
++ Modifying the output of BUSseq_MCMC as a SingleCellExperiment object and allowing the input as that object as well 

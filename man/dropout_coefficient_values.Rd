@@ -2,17 +2,17 @@
 \alias{dropout_coefficient_values}
 \title{
 Obtain the Coefficients of the Logistic Regression for the Dropout
-Events from a \code{BUSseqfits} Object
+Events from the Output of the \code{BUSseq_MCMC} Function
 }
 \description{
-The function gives the intercept and odds ratio of the logistic
-regression for dropout events in a \code{BUSseqfits} object.
+The function gives the intercept and odds ratio of the logistic regression 
+for dropout events in the output \code{SingleCellExperiment} object.
 }
 \usage{
-dropout_coefficient_values(BUSseqfits_obj)
+dropout_coefficient_values(sce_BUSseqfit)
 }
 \arguments{
-  \item{BUSseqfits_obj}{ A \code{BUSseqfits} object obtained from 
+  \item{sce_BUSseqfit}{An output \code{SingleCellExperiment} object by 
   the function \code{BUSseq_MCMC}.}
 }
 \value{
@@ -29,7 +29,7 @@ Nature communications 11, no. 1 (2020): 1-15.
 Fangda Song
 }
 \examples{
-#"BUSseqfits_example" is a sample of BUSseqfits object
-class(BUSseqfits_example)
+# "BUSseqfits_example" is an example output
+BUSseqfits_example
 gamma.est <- dropout_coefficient_values(BUSseqfits_example)
 }

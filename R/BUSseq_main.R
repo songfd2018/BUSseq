@@ -22,24 +22,81 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
   
   Read <- NULL #input data Y
   nb <- NULL
-  
+  batch_name_vec <- NULL
   if(is(ObservedData, "list")){       #The input data format is list
-    #Each row represents a gene and each column is a cell
-    B <- length(ObservedData)# batch number   
-    for(b in seq_len(B)){#input data
-      if(is(ObservedData[[b]],"data.frame") | is(ObservedData[[b]],"matrix")){
-        ObservedData[[b]] <- as.matrix(ObservedData[[b]])
-      }else{
-        stop("Each element of ObservedData must be a",
-                    " \"matrix\" or \"data.frame\" object!\n")
-      }
-      Read <- cbind(Read,ObservedData[[b]])
-      nb <- c(nb,ncol(ObservedData[[b]]))
-    }
-    ###################################
-    ###Test the consistency of genes###
+     #Each row represents a gene and each column is a cell
+     B <- length(ObservedData)# batch number   
+     for(b in seq_len(B)){#input data
+        if(is(ObservedData[[b]],"data.frame") | is(ObservedData[[b]],"matrix")){
+           ObservedData[[b]] <- as.matrix(ObservedData[[b]])
+        }else{
+           stop("Each element of ObservedData must be a",
+                " \"matrix\" or \"data.frame\" object!\n")
+        }
+        Read <- cbind(Read,ObservedData[[b]])
+        nb <- c(nb,ncol(ObservedData[[b]]))
+        batch_name_vec <- c(batch_name_vec, paste("Batch",b))
+     }
+     
+     G <- nrow(Read)
+     N <- sum(nb)
+     
+     res <- SingleCellExperiment(assays = list(counts = RawCountData),
+            colData = DataFrame(Batch_ind = factor(rep(batch_name_vec,nb))))
+     ###################################
+     ###Test the consistency of genes###
+  }else if(is(ObservedData, "SingleCellExperiment")){
+     
+     # check whether batch indicators exist in the colData 
+     # of SingleCellExperiment
+     if(sum(names(colData(ObservedData)) == "Batch_ind") == 0){
+        message("Please set the batch indicators of each cell by",
+                " \"colData(ObservedData) = DataFrame(Batch_ind = ...)\"")
+        stop("The batch indicators does not exist!\n")
+     }
+     
+     Read <- assay(ObservedData, "counts")
+     if(is.null(Read)){
+        stop("Fail to load read count data from the input!\n")
+     }
+     
+     if(is(Read,"data.frame") | is(Read,"matrix")){
+        Read <- as.matrix(Read)
+     }else{
+        stop("The \"counts\" assay must be a",
+             " \"matrix\" or \"data.frame\" object!\n")
+     }
+     
+     N <- ncol(Read)
+     G <- nrow(Read)
+     
+     batch_ind <- unlist(colData(ObservedData))
+     
+     # search the batch indicators to get batch names
+     B <- length(unique(batch_ind))# batch number 
+     num_change <- 1
+     batch_name_vec <- batch_ind[1]
+     nb <- rep(NA, B)
+     
+     end_last_batch <- 0
+     for(i in seq_len(N-1)){
+        if(batch_ind[i] != batch_ind[i+1]){
+           num_change <- num_change + 1
+           if(num_change > B){
+              stop("Cells from the same batch should be arranged together.\n")
+           }
+           batch_name_vec <- c(batch_name_vec, batch_ind[i+1])
+           nb[num_change - 1] <- i - end_last_batch
+           end_last_batch <- i
+        }
+     }
+     nb[B] <- N - end_last_batch
+     
+     res <- ObservedData
+     
   }else{
-    stop("ObservedData must be a \"list\" object!\n")
+     stop("ObservedData must be a \"list\" or \"SingleCellExperiment\" 
+          object!\n")
   }
   
   if(B < 2){
@@ -47,9 +104,7 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
   }
   
   K <- n.celltypes
-  G <- nrow(Read)
-  N <- sum(nb)
-  
+
   if(sum(K > nb) > 0){
     stop("The sample size in any batch must be greater",
                 " than the assumed cell type number.\n")
@@ -108,7 +163,7 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
   #######################
   # Posterior inference #
   #######################
-  message("   conducting the posterior inferences...\n")
+  message("   conducting the posterior inference...\n")
   t.start<-Sys.time()
   post_inference <- .C("BUSseq_inference",
                        # count data
@@ -168,48 +223,40 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
   BIC <- post_inference$BIC
   
   t.end<-Sys.time()
-  message("   calculating posterior means and posterior takes: ", 
+  message("   Posterior inference takes: ", 
                  round(difftime(t.end, t.start,units="mins"), 3),
                  " mins", "\n")
-  ###Generate the output "BUSseqfits" object
-  #transfer Read, x.post, delta.est, w.est, delta.sd as a list
-  Read_list <- list()
-  Read_sim_list <- list()
-  delta.est_list <- list()
-  delta.sd_list <- list()
-  w_list <- list()
-  cell_index <- 0
-  for(b in seq_len(B)){
-    Read_list[[b]] <- Read[,cell_index + seq_len(nb[b])]
-    Read_sim_list[[b]] <- x_imputed[,cell_index + seq_len(nb[b])]
-    delta.est_list[[b]] <- delta.est[cell_index + seq_len(nb[b])]
-    delta.sd_list[[b]] <- delta.sd[cell_index + seq_len(nb[b])]
-    w_list[[b]] <- w.est[cell_index + seq_len(nb[b])]
-    cell_index <- cell_index + nb[b]
-  }
   
-  output <- list(CountData_raw=Read_list, CountData_imputed=Read_sim_list,
-                 #dimensions
-                 n.cell=N, n.gene=G, n.batch=B, 
-                 n.perbatch=nb, n.celltype=K, 
-                 n.iter=n.iterations, n.burnin = n.burnin,
-                 seed=seed,
-                 #posterior mean or mode of parameters
-                 gamma.est=gamma.est, alpha.est=alpha.est, 
-                 beta.est=beta.est, nu.est=nu.est,
-                 delta.est=delta.est_list, phi.est=phi.est, pi.est=pi.est,
-                 w.est=w_list, p.est=p.est, tau0.est=tau0.est,
-                 PPI.est=PPI.est, D.est = D.est,
-                 #posterior sd of pararmeters
-                 gamma.sd = gamma.sd, alpha.sd=alpha.sd, 
-                 beta.sd=beta.sd, nu.sd=nu.sd,
-                 delta.sd=delta.sd_list, phi.sd=phi.sd, pi.sd=pi.sd,
-                 p.sd=p.sd, tau0.sd=tau0.sd,
-                 BIC = BIC)
+  # Construct the output
+  assay(res, withDimnames = FALSE, "imputed_data") <- x_imputed
   
-  class(output) <- "BUSseqfits"
+  # add estimated cell type labels to column-level metadata
+  int_colData(res)$BUSseq <- DataFrame(CellLabels = w.est,
+                                       RelativeSizeFactors = exp(delta.est))
   
-  return(output)
+  # add intrinsic gene indicators to row-level metadata
+  intri_ind <- rep("No", G)
+  intri_ind[which(D.est == 1)] <- "Yes"
+  int_elementMetadata(res)$BUSseq <- DataFrame(IntrinsicGene = intri_ind)
+  
+  int_metadata(res)$BUSseq <- list(
+     #dimensions
+     n.cell=N, n.gene=G, n.batch=B, n.perbatch=nb, n.celltype=K,
+     n.iter=n.iterations, n.burnin = n.burnin, seed=seed,
+     #posterior mean or mode of parameters
+     gamma.est=gamma.est, alpha.est=alpha.est, 
+     beta.est=beta.est, nu.est=nu.est,
+     delta.est=delta.est, phi.est=phi.est, pi.est=pi.est,
+     w.est=w.est, p.est=p.est, tau0.est=tau0.est,
+     PPI.est=PPI.est, D.est = D.est,
+     #posterior sd of pararmeters
+     gamma.sd = gamma.sd, alpha.sd=alpha.sd, 
+     beta.sd=beta.sd, nu.sd=nu.sd,
+     delta.sd=delta.sd, phi.sd=phi.sd, pi.sd=pi.sd,
+     p.sd=p.sd, tau0.sd=tau0.sd,
+     BIC = BIC)
+  
+  return(res)
   
 }
 
@@ -217,420 +264,336 @@ BUSseq_MCMC <- function(ObservedData, n.celltypes,
 # Useful Outputs from BUSseqfits #
 ##################################
 #obtain the cell type indicators for samples
-celltypes <- function(BUSseqfits_obj){
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   .B <- BUSseqfits_obj$n.batch
-   .w <- BUSseqfits_obj$w.est
-   
-   for(b in seq_len(.B)){
-      
-      message("Batch ", b, " cells' cell type indicators: ",
-            .w[[b]][1],",",.w[[b]][2],",",.w[[b]][3], 
-            "... ...\n")
-   }
-   message("The output format is a list with length",
-         " equal to the batch number.\n")
-            message("Each element of the list is a cell type indicator",
-                " vector in that batch.\n")
-   return(.w)
+celltypes <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         
+         .B <- int_metadata(sce_BUSseqfit)$BUSseq$n.batch
+         .nb <-int_metadata(sce_BUSseqfit)$BUSseq$n.perbatch
+         .w <- int_metadata(sce_BUSseqfit)$BUSseq$w.est
+         
+         index_cell <- 0
+         for(b in seq_len(.B)){
+            
+            message("Batch ", b, " cells' cell type indicators: ",
+                    .w[index_cell + 1],",",.w[index_cell + 2],",",
+                    .w[index_cell + 3], "... ...\n")
+            
+            index_cell <- index_cell + .nb[b]
+         }
+         message("The output format is an N-dimensional verctor.\n")
+         return(.w)
+         
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
 #obtain the dropout intercept and odds ratio
-dropout_coefficient_values <- function(BUSseqfits_obj){
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   .gamma<-BUSseqfits_obj$gamma.est
-   message("The output format is a matrix.\n")
-   message("Each row represents a batch, the first column corresponds",
-                " to intercept and the second column is the odd ratio.\n")
-   return(.gamma)
+dropout_coefficient_values <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         .gamma<-int_metadata(sce_BUSseqfit)$BUSseq$gamma.est
+         message("The output format is a matrix.\n")
+         message("Each row represents a batch, the first column corresponds",
+                 " to intercept and the second column is the odd ratio.\n")
+         return(.gamma)
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
 #obtain the log-scale baseline expression values
-baseline_expression_values <- function(BUSseqfits_obj){
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   .alpha<-BUSseqfits_obj$alpha.est
-   message("The output format is a vector.\n")
-   return(.alpha)
+baseline_expression_values <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         .alpha <- int_metadata(sce_BUSseqfit)$BUSseq$alpha.est
+         message("The output format is a vector.\n")
+         return(.alpha)
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
    
 #obtain the cell type effects
-celltype_effects <- function(BUSseqfits_obj){
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   .beta<-BUSseqfits_obj$beta.est
-   message("The output format is a matrix.\n")
-   message("Each row represents a gene, and each column corresponds",
-                " to a cell type.\n")
-   return(.beta)
+celltype_effects <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         .beta <- int_metadata(sce_BUSseqfit)$BUSseq$beta.est
+         message("The output format is a matrix.\n")
+         message("Each row represents a gene, and each column corresponds",
+                 " to a cell type.\n")
+         return(.beta)
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
 #obtain the cell-tpye-specific mean expression levels
-celltype_mean_expression <- function(BUSseqfits_obj){
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   .alpha<-BUSseqfits_obj$alpha.est
-   .beta<-BUSseqfits_obj$beta.est
-   
-   mu <- exp(.alpha+.beta)
-   
-   message("The output format is a matrix.\n")
-   message("Each row represents a gene, and each column corresponds",
-                " to a cell type.\n")
-   return(mu)
+celltype_mean_expression <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         .alpha <- int_metadata(sce_BUSseqfit)$BUSseq$alpha.est
+         .beta <- int_metadata(sce_BUSseqfit)$BUSseq$beta.est
+         mu <- exp(.alpha+.beta)
+         message("The output format is a matrix.\n")
+         message("Each row represents a gene, and each column corresponds",
+                 " to a cell type.\n")
+         return(mu)
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
 #obtain the location batch effects
-location_batch_effects <- function(BUSseqfits_obj){
-   
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   .nu<-BUSseqfits_obj$nu.est
-   message("The output format is a matrix.\n")
-   message("Each row represents a gene, and each column",
-         " corresponds to a batch.\n")
-   return(.nu)
+location_batch_effects <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         .nu <- int_metadata(sce_BUSseqfit)$BUSseq$nu.est
+         message("The output format is a matrix.\n")
+         message("Each row represents a gene, and each column",
+                 " corresponds to a batch.\n")
+         return(.nu)
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
 #obtain the scale batch effects
-overdispersions <- function(BUSseqfits_obj){
-   
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   .phi<-BUSseqfits_obj$phi.est
-   message("The output format is a matrix.\n")
-   message("Each row represents a gene, and each column",
-         " corresponds to a batch.\n")
-   return(.phi)
+overdispersions <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         .phi <- int_metadata(sce_BUSseqfit)$BUSseq$phi.est
+         message("The output format is a matrix.\n")
+         message("Each row represents a gene, and each column",
+                 " corresponds to a batch.\n")
+         return(.phi)
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
 #obtain the cell-specific size effects
-cell_effect_values <- function(BUSseqfits_obj){
-   
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   .delta<-BUSseqfits_obj$delta.est
-   message("The output format is a list with length equal to",
-         " the batch number.\n")
-   message("Each element of the list is a cell-specific",
-                " size factor vector of that batch.\n")
-   return(.delta)
+cell_effect_values <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         .delta <- int_metadata(sce_BUSseqfit)$BUSseq$delta.est
+         message("The output format is an N-dimensional vector.\n")
+         return(.delta)
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
-
-#obtain the instrinsic genes
-intrinsic_genes_BUSseq <- function(BUSseqfits_obj){
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   
-   intrinsic_genes <- which(BUSseqfits_obj$D.est==1)
-   return(intrinsic_genes)
+#obtain the intrinsic genes
+intrinsic_genes_BUSseq <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         intrinsic_genes <- int_elementMetadata(sce_BUSseqfit)$BUSseq
+         return(intrinsic_genes)
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
 #obtain the BIC score
-BIC_BUSseq <- function(BUSseqfits_obj){
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   .BIC<-BUSseqfits_obj$BIC
-   message("BIC is ", .BIC, "\n")
-   message("The output is a scalar.\n")
-   return(.BIC)
+BIC_BUSseq <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         .BIC <- int_metadata(sce_BUSseqfit)$BUSseq$BIC
+         message("BIC is ", .BIC, "\n")
+         message("The output is a scalar.\n")
+         return(.BIC)
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
 #obtain the raw count data
-raw_read_counts<- function(BUSseqfits_obj){
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   
-   Read_raw <- BUSseqfits_obj$CountData_raw
-   
-   class(Read_raw) <- "CountData"
-   
-   message("The output format is a \"CountData\" object with length",
-         " equal to the batch number.\n")
-   message("Each element of the object is the raw read count matrix.\n")
-   message("In each matrix, each row represents a gene and each column",
-         " correspods to a cell.\n")
-   
-   return(Read_raw)
-   
+raw_read_counts <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+         Read_raw <- assay(sce_BUSseqfit, "counts")
+         message("The output format is a matrix, in which each row",
+                 " represents a gene and each column does a cell.\n")
+         return(Read_raw)
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
 #obtain the underlying true count data
-imputed_read_counts<- function(BUSseqfits_obj){
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   
-   Read_imputed <- BUSseqfits_obj$CountData_imputed
-   
-   class(Read_imputed) <- "CountData"
-   
-   message("The output format is a \"CountData\" object with length",
-         " equal to the batch number.\n")
-   message("Each element of the object is the imputed read count matrix.\n")
-   message("In each matrix, each row represents a gene and each column",
-         " correspods to a cell.\n")
-   
-   return(Read_imputed)
-   
-   }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
-   }
-}
-
-#obatin the corrected count data
-corrected_read_counts<- function(BUSseqfits_obj){
-   if(is(BUSseqfits_obj,"BUSseqfits")){
-   Truereads_list <- BUSseqfits_obj$CountData_imputed
-   .B <- BUSseqfits_obj$n.batch
-   .nb <- BUSseqfits_obj$n.perbatch
-   .N <- BUSseqfits_obj$n.cell
-   .G <- BUSseqfits_obj$n.gene
-   .K <- BUSseqfits_obj$n.celltype
-   .gamma <- BUSseqfits_obj$gamma.est
-   .logmu <- BUSseqfits_obj$alpha.est + BUSseqfits_obj$beta.est
-   .nu <- BUSseqfits_obj$nu.est
-   .delta <- BUSseqfits_obj$delta.est
-   .phi <- BUSseqfits_obj$phi.est
-   .w <- BUSseqfits_obj$w.est
-   Truereads <- NULL
-   delta_vec <- NULL
-   w_vec <- NULL
-   for(b in seq_len(.B)){
-      Truereads <- cbind(Truereads,Truereads_list[[b]])
-      delta_vec <- c(delta_vec, .delta[[b]])
-      w_vec <- c(w_vec, .w[[b]])
-   }
-   message("   correcting read counts...\n")
-   read_corrected <- Truereads
-   cell_index <- 1
-   for(b in seq_len(.B)){
-      for(i in seq_len(.nb[b])){
-      unc_mu <- exp(.logmu[,w_vec[cell_index]] + 
-                      .nu[,b] + delta_vec[cell_index])
-      p_x<-pnbinom(Truereads[,cell_index],size=.phi[,b], mu=unc_mu)
-      p_xminus1<-pnbinom(Truereads[,cell_index]-1,size=.phi[,b], 
-                      mu=unc_mu)
-      u <- runif(.G,min=p_xminus1,max=p_x)
-      u <- apply(cbind(u,0.9999),1,min)
-      cor_mu <- exp(.logmu[,w_vec[cell_index]])
-      read_corrected[,cell_index] <- 
-        qnbinom(u,size =.phi[,1], mu=cor_mu)
-      cell_index <- cell_index + 1
+imputed_read_counts <- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         Read_imputed <- assay(sce_BUSseqfit, "imputed_data")
+         message("The output format is a matrix, in which each row",
+                 " represents a gene and each column does a cell.\n")
+         return(Read_imputed)
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
       }
-   }
-   Read_corrected <- list()
-   cell_index <- 0
-   for(b in seq_len(.B)){
-      Read_corrected[[b]] <- read_corrected[,cell_index + seq_len(.nb[b])]
-      cell_index <- cell_index + .nb[b]
-   }
-   class(Read_corrected) <- "CountData"
-   message("The output format is a \"CountData\" object with length",
-         " equal to the batch number.\n")
-   message("Each element of the object is the corrected read count matrix.\n")
-   message("In each matrix, each row represents a gene and",
-         " each column correspods to a cell.\n")
-   return(Read_corrected)
    }else{
-   stop("BUSseqfits_obj must be   a \"BUSseqfits\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
 
-##############################################################################
-# print and summary
-##############################################################################
-#print BUSseqfits
-print.BUSseqfits <- function(x, ...){
-   BUSseqfits <- x
-   .G <- BUSseqfits$n.gene
-   .B <- BUSseqfits$n.batch
-   
-   
-   message("Cell type indicators:\n")
-   .w <- BUSseqfits$w.est
-   .nb <- BUSseqfits$n.perbatch
-   for(b in seq_len(.B)){
-   
-   message("Batch ", b, " cells' cell type indicators: ",
-                .w[[b]][1],",",.w[[b]][2],",",.w[[b]][3], 
-                "... ...\n")
+#obtain the corrected count data
+corrected_read_counts<- function(sce_BUSseqfit){
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         Read_imputed <- assay(sce_BUSseqfit, "imputed_data")
+         .B <- int_metadata(sce_BUSseqfit)$BUSseq$n.batch
+         .nb <- int_metadata(sce_BUSseqfit)$BUSseq$n.perbatch
+         .N <- int_metadata(sce_BUSseqfit)$BUSseq$n.cell
+         .G <- int_metadata(sce_BUSseqfit)$BUSseq$n.gene
+         .K <- int_metadata(sce_BUSseqfit)$BUSseq$n.celltype
+         .gamma <- int_metadata(sce_BUSseqfit)$BUSseq$gamma.est
+         .logmu <- int_metadata(sce_BUSseqfit)$BUSseq$alpha.est + 
+            int_metadata(sce_BUSseqfit)$BUSseq$beta.est
+         .nu <- int_metadata(sce_BUSseqfit)$BUSseq$nu.est
+         .delta <- int_metadata(sce_BUSseqfit)$BUSseq$delta.est
+         .phi <- int_metadata(sce_BUSseqfit)$BUSseq$phi.est
+         .w <- int_metadata(sce_BUSseqfit)$BUSseq$w.est
+         
+         message("   correcting read counts...\n")
+         Read_corrected <- Read_imputed
+         cell_index <- 1
+         for(b in seq_len(.B)){
+            for(i in seq_len(.nb[b])){
+               unc_mu <- exp(.logmu[,.w[cell_index]] + 
+                                .nu[,b] + .delta[cell_index])
+               p_x<-pnbinom(Read_imputed[,cell_index],size=.phi[,b], mu=unc_mu)
+               p_xminus1<-pnbinom(Read_imputed[,cell_index]-1,size=.phi[,b], 
+                                  mu=unc_mu)
+               u <- runif(.G,min=p_xminus1,max=p_x)
+               u <- apply(cbind(u,0.9999),1,min)
+               cor_mu <- exp(.logmu[,.w[cell_index]])
+               Read_corrected[,cell_index] <- 
+                  qnbinom(u,size =.phi[,1], mu=cor_mu)
+               cell_index <- cell_index + 1
+            }
+         }
+         
+         assay(sce_BUSseqfit, withDimnames = FALSE, 
+               "corrected_data") <- Read_corrected
+         message("The corrected read count matrix is added into the output",
+                 " \"SingleCellExperiment\" object.\n")
+         return(sce_BUSseqfit)
+         
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
+   }else{
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
-   message("\n")
-   
-   message("The estimated location batch effects:\n")
-   .nu <- BUSseqfits$nu.est
-   for(b in seq_len(.B)){
-   message("    Batch ", b, " location batch effects are: ",
-         .nu[1,b],",",.nu[2,b],",",.nu[3,b], "... ...\n")
-   }
-   message("\n")
-   
-   message("The estimated overdispersions:\n")
-   .phi <- BUSseqfits$phi.est
-   for(b in seq_len(.B)){
-   message("    Batch ", b, " scale batch effects are: ",
-         .phi[1,b],",",.phi[2,b],",",.phi[3,b], "... ...\n")
-   }
-   message("\n")
-}
-
-#summarize BUSseqfits
-summary.BUSseqfits <- function(object, ...){
-   BUSseqfits <- object
-   .G <- BUSseqfits$n.gene
-   .B <- BUSseqfits$n.batch
-   .K <- BUSseqfits$n.celltype
-   .N <- BUSseqfits$n.cell
-   
-   num_iters <- BUSseqfits$n.iter
-   num_burnin <- BUSseqfits$n.burnin
-   message(c("B=", .B, " batches\n"))
-   message(c("G=", .G, " genes\n"))
-   message(c("K=", .K, " cell types\n"))
-   message(c("N=", .N, " cells in total\n"))
-   message(c("Run ", num_iters," iterations with the first ",num_burnin,
-             " iterations as burnin in the MCMC algorithm.\n\n"))
-   message("BUSseqfits is an R list that contains",
-             " the following main elements:\n\n")
-   message("    BUSseqfits$w.est : the estimated cell type indicators,",
-          " a list with length equal to B.\n")
-   message("    BUSseqfits$pi.est : the estimated cell type proportions",
-             " across batches, a K by B matrix.\n")
-   message("    BUSseqfits$gamma.est : the estimated the coefficients",
-             " of the logistic regression for the dropout events,",
-             " a B by 2 matrix\n")
-   message("    BUSseqfits$alpha.est : the estimated log-scale baseline",
-             " expression levels, a vector with length G.\n")
-   message("    BUSseqfits$beta.est : the estimated cell type effects,",
-          " a G by K matrix.\n")
-   message("    BUSseqfits$delta.est : the estimated cell-specific",
-             " effects, a list with length equal to B.\n")
-   message("    BUSseqfits$nu.est : the estimated location batch",
-                  " effects, a G by B matrix.\n")
-   message("    BUSseqfits$phi.est : the estimated overdispersion",
-             " parameters, a G by B matrix.\n")
-   message("    BUSseqfits$BIC : the BIC, a scalar.\n")
-   message("    BUSseqfits$D.est : the intrinsic gene indicators,",
-             " a vector with length N.\n")
-   message("    For more output values, please use \"?BUSseq_MCMC\"\n")
-   message("\n")
-}
-
-#print CountData
-print.CountData <- function(x, ...){
-   CountData <- x
-
-   .B <- length(CountData)
-   .G <- nrow(CountData[[1]])
-   
-   message("There are ", .B, " batches and ", .G, " genes.\n")
-   for(b in seq_len(.B)){
-   .nperbatch <- ncol(CountData[[b]])
-   message("Batch ", b, " contains ", .nperbatch, 
-                " cells, and their read counts in all genes are: \n")
-   message("Gene 1: ", CountData[[b]][1,1],", ", CountData[[b]][1,2],
-                ", ", CountData[[b]][1,3], ", ... ...\n")
-   message("Gene 2: ", CountData[[b]][2,1],", ", CountData[[b]][2,2],
-                ", ", CountData[[b]][2,3], ", ... ...\n")
-   message("Gene 3: ", CountData[[b]][3,1],", ", CountData[[b]][3,2],
-                ", ", CountData[[b]][3,3], ", ... ...\n")
-   message("    ... ...\n\n")
-   }
-   message("\n")
-   
-}
-
-#summarize CountData
-summary.CountData <- function(object, ...){
-
-   CountData <- object
-   
-   .B <- length(CountData)
-   .G <- nrow(CountData[[1]])
-   
-   message("There are ", .B, " batches and ", .G, " genes.\n")
-   for(b in seq_len(.B)){
-   .nperbatch <- ncol(CountData[[b]])
-   message("Batch ", b, " contains ", .nperbatch, " cells.")
-   }
-   message("\n")
 }
 
 ########################################################################
 # Visualization
 ########################################################################
 #visualize the read counts data by stacking all gene expression matrices 
-heatmap_data_BUSseq <- function(CountData_obj, gene_set=NULL, 
-                        project_name="BUSseq_heatmap", 
+heatmap_data_BUSseq <- function(sce_BUSseqfit, 
+                        data_type = c("Raw","Imputed","Corrected"), 
+                        gene_set=NULL, 
+                        project_name= paste0("BUSseq_heatmap_",data_type), 
                         image_dir=NULL, color_key_seq=NULL, 
                         image_width=1440, image_height=1080){
-   if(is(CountData_obj,"CountData")){
-   .B <- length(CountData_obj)
-   .G <- nrow(CountData_obj[[1]])
-   .nb <- rep(NA,.B)
-   for(b in seq_len(.B)) .nb[b] <- ncol(CountData_obj[[b]])
-   if(is.null(gene_set)) gene_set <- seq_len(.G)
-   #heatmap cell colors
-   colfunc <- colorRampPalette(c("grey", "black"))
-   #batch colors
-   color_batch_func <- colorRampPalette(
-     c("#EB4334","#FBBD06","#35AA53","#4586F3"))
-   color_batch <- color_batch_func(.B)
-   color_batch2 <- NULL
-   for(b in seq_len(.B)){
-     color_batch2 <- c(color_batch2, rep(color_batch[b], .nb[b]))
-   } 
-   log1p_mat <- NULL
-   for(b in seq_len(.B)){
-     log1p_mat <- cbind(log1p_mat, log1p(CountData_obj[[b]]))
-   } 
-   log1p_mat_interest <- log1p_mat[gene_set, ]
-   if(is.null(color_key_seq)){
-   range_data <- range(log1p_mat_interest)
-   color_key_seq <- seq(from=floor(range_data[1]) - 0.5, 
-                   to=ceiling(range_data[2]) + 0.5, length.out=11)
-   }
-   if(is.null(image_dir)) image_dir <- "./image"
-   #create the folder
-   dir.create(image_dir,showWarnings=FALSE)
-   png(paste(image_dir,"/",project_name,"_log1p_data.png",sep=""),
-      width=image_width, height=image_height)
-   heatmap.2(log1p_mat_interest,
-         dendrogram="none",#with cluster tree
-         Rowv=FALSE, Colv=FALSE,
-         labRow=FALSE, labCol=FALSE,
-         ColSideColors=color_batch2,
-         #RowSideColors=genetype_color,
-         col=colfunc(length(color_key_seq)-1),breaks=color_key_seq,
-         density.info="histogram",
-         hclustfun=function(c)hclust(c,method="average"),
-         keysize=0.8, cexRow=0.5,trace="none")#font size
-   dev.off()
+   
+   if(is(sce_BUSseqfit,"SingleCellExperiment")){
+      if(!is.null(int_metadata(sce_BUSseqfit)$BUSseq)){
+         if(length(data_type) > 1){
+            data_type <- data_type[1]
+         }
+         if(data_type == "Raw"){
+            count_data <- assay(sce_BUSseqfit, "counts")
+         }else if(data_type == "Imputed"){
+            count_data <- assay(sce_BUSseqfit, "imputed_data")
+         }else if(data_type == "Corrected"){
+            if(sum(assayNames(sce_BUSseqfit) == "corrected_data") == 0){
+               message("The corrected read count matrix",
+                       " has not been generated.\n")
+               stop("Please run the \"corrected_read_counts\" function!\n")
+            }else{
+               count_data <- assay(sce_BUSseqfit, "corrected_data")
+            }
+
+         }else{
+            stop("Please select the data type from ",
+                 "\"Raw\", \"Imputed\" or \"Corrected\" to draw the heatmap!")
+         }
+        
+         
+         
+         .B <- int_metadata(sce_BUSseqfit)$BUSseq$n.batch
+         .nb <- int_metadata(sce_BUSseqfit)$BUSseq$n.perbatch
+         .G <- int_metadata(sce_BUSseqfit)$BUSseq$n.gene
+         
+         if(is.null(gene_set)) gene_set <- seq_len(.G)
+         #heatmap cell colors
+         colfunc <- colorRampPalette(c("grey", "black"))
+         #batch colors
+         color_batch_func <- colorRampPalette(
+            c("#EB4334","#FBBD06","#35AA53","#4586F3"))
+         color_batch <- color_batch_func(.B)
+         color_batch2 <- rep(color_batch, .nb)
+         
+         log1p_mat <- log1p(count_data)
+         log1p_mat_interest <- log1p_mat[gene_set, ]
+         if(is.null(color_key_seq)){
+            range_data <- range(log1p_mat_interest)
+            color_key_seq <- seq(from=floor(range_data[1]) - 0.5, 
+                                 to=ceiling(range_data[2]) + 0.5, length.out=11)
+         }
+         if(is.null(image_dir)) image_dir <- "./image"
+         #create the folder
+         dir.create(image_dir,showWarnings=FALSE)
+         png(paste(image_dir,"/",project_name,"_log1p_data.png",sep=""),
+             width=image_width, height=image_height)
+         heatmap.2(log1p_mat_interest,
+                   dendrogram="none",#with cluster tree
+                   Rowv=FALSE, Colv=FALSE,
+                   labRow=FALSE, labCol=FALSE,
+                   ColSideColors=color_batch2,
+                   col=colfunc(length(color_key_seq)-1),breaks=color_key_seq,
+                   density.info="histogram",
+                   hclustfun=function(c)hclust(c,method="average"),
+                   keysize=0.8, cexRow=0.5,trace="none")#font size
+         dev.off()
+         
+      }else{
+         stop("The output of the \"BUSseq_MCMC\" function does not exist!\n")
+      }
    }else{
-   stop("CountData_obj must be a \"CountData\" object!\n")
+      stop("The input must be a \"SingleCellExperiment\" object!\n")
    }
 }
